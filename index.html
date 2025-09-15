@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>工具中心 - 首页</title>
+  <style>
+    :root { 
+      --nav-h: 52px; 
+      --panel: #ffffff; 
+      --border: #e5e7eb; 
+      --text: #111827; 
+      --muted: #6b7280; 
+      --accent: #1b65ff;
+      --success: #10b981;
+      --warning: #f59e0b;
+    }
+    
+    body { 
+      margin: 0; 
+      font: 14px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, 'PingFang SC','Hiragino Sans GB','Microsoft YaHei', sans-serif; 
+      color: var(--text); 
+      background: #f9fafb; 
+    }
+    
+    /* 导航栏样式 */
+    .navbar { 
+      position: sticky; 
+      top: 0; 
+      z-index: 9999; 
+      background: var(--panel); 
+      border-bottom: 1px solid var(--border); 
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+    }
+    
+    .navbar .wrap { 
+      display: flex; 
+      align-items: center; 
+      gap: 10px; 
+      padding: 10px 16px; 
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    .navbar .brand { 
+      font-weight: 700; 
+      color: var(--text); 
+      margin-right: 6px; 
+      font-size: 18px;
+    }
+    
+    .navbar .spacer { flex: 1; }
+    
+    .navbar a.navlink { 
+      display: inline-flex; 
+      align-items: center; 
+      gap: 6px; 
+      padding: 8px 16px; 
+      border: 1px solid var(--border); 
+      border-radius: 10px; 
+      color: #374151; 
+      text-decoration: none; 
+      font-size: 14px; 
+      transition: all 0.2s ease;
+    }
+    
+    .navbar a.navlink:hover { 
+      background: #f3f4f6; 
+      border-color: #d1d5db; 
+      transform: translateY(-1px);
+    }
+    
+    .navbar a.navlink.active { 
+      background: var(--accent); 
+      border-color: var(--accent); 
+      color: #ffffff; 
+    }
+    
+    /* 主内容区域 */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem 1rem;
+    }
+    
+    .hero {
+      text-align: center;
+      margin-bottom: 4rem;
+      padding: 3rem 0;
+    }
+    
+    .hero h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 1rem;
+    }
+    
+    .hero p {
+      font-size: 1.125rem;
+      color: var(--muted);
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    
+    /* 工具卡片网格 */
+    .tools-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+      gap: 2rem;
+      margin-bottom: 4rem;
+    }
+    
+    .tool-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2rem;
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+      transition: all 0.3s ease;
+      text-decoration: none;
+      color: inherit;
+    }
+    
+    .tool-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 10px 25px 0 rgba(0, 0, 0, 0.1);
+      border-color: var(--accent);
+    }
+    
+    .tool-icon {
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, var(--accent), #3b82f6);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      margin-bottom: 1.5rem;
+    }
+    
+    .tool-card h3 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 0.5rem;
+    }
+    
+    .tool-card p {
+      color: var(--muted);
+      margin-bottom: 1.5rem;
+      line-height: 1.6;
+    }
+    
+    .tool-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+    
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+    
+    .status-dot.online {
+      background: var(--success);
+    }
+    
+    .status-dot.beta {
+      background: var(--warning);
+    }
+    
+    /* 页脚 */
+    .footer {
+      text-align: center;
+      padding: 2rem 0;
+      color: var(--muted);
+      font-size: 0.875rem;
+      border-top: 1px solid var(--border);
+      background: var(--panel);
+    }
+    
+    /* 响应式设计 */
+    @media (max-width: 768px) {
+      .hero h1 {
+        font-size: 2rem;
+      }
+      
+      .tools-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .tool-card {
+        padding: 1.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar" role="navigation" aria-label="主导航">
+    <div class="wrap">
+      <div class="brand">🛠️ 工具中心</div>
+      <a class="navlink" href="./index.html" aria-current="page">首页</a>
+      <a class="navlink" href="./image-gallery.html">批量图片展示器</a>
+      <a class="navlink" href="./customer-search.html">客户信息搜索</a>
+      <a class="navlink" href="./customer-card.html">客户信息卡生成器</a>
+      <a class="navlink" href="./script-editor.html">话术编辑器</a>
+      <div class="spacer"></div>
+      <button class="btn" id="logoutBtn" style="padding: 6px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; color: var(--muted); font-size: 12px; transition: all 0.2s;" title="点击登出或按 Ctrl+Shift+L">🔒 登出</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="hero">
+      <h1>工具中心</h1>
+      <p>提供批量图片展示和客户信息搜索等实用工具，纯前端运行，保护您的数据隐私</p>
+    </div>
+
+    <div class="tools-grid">
+      <a href="./image-gallery.html" class="tool-card">
+        <div class="tool-icon">🖼️</div>
+        <h3>批量图片链接展示器</h3>
+        <p>支持批量导入图片链接，自动生成可视化画廊。支持Excel/CSV/TSV文件导入，具备智能筛选和分类功能。</p>
+        <div class="tool-status">
+          <div class="status-dot online"></div>
+          <span>已上线</span>
+        </div>
+      </a>
+
+      <a href="./customer-search.html" class="tool-card">
+        <div class="tool-icon">🔍</div>
+        <h3>客户信息搜索工具</h3>
+        <p>强大的客户数据管理和搜索工具。支持多种文件格式导入，智能列分类，高效数据筛选和导出。</p>
+        <div class="tool-status">
+          <div class="status-dot online"></div>
+          <span>已上线</span>
+        </div>
+      </a>
+      
+      <a href="./customer-card.html" class="tool-card">
+        <div class="tool-icon">📋</div>
+        <h3>客户信息卡生成器</h3>
+        <p>智能生成客户信息卡，支持一键复制为图片发送微信。包含星级评估、GMV数据、活动资源等信息。</p>
+        <div class="tool-status">
+          <div class="status-dot online"></div>
+          <span>已上线</span>
+        </div>
+      </a>
+      
+      <a href="./script-editor.html" class="tool-card">
+        <div class="tool-icon">📝</div>
+        <h3>话术编辑器</h3>
+        <p>基于客户数据智能生成个性化话术。支持模板编辑、字段变量插入、实时预览和批量导出功能。</p>
+        <div class="tool-status">
+          <div class="status-dot online"></div>
+          <span>新上线</span>
+        </div>
+      </a>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <p>© 2025 工具中心 · 纯前端本地运行，不上传您的数据</p>
+  </footer>
+
+  <script>
+    // 身份验证检查
+    const SESSION_KEY = 'toolcenter_auth';
+    const REMEMBER_KEY = 'toolcenter_remember';
+    
+    function checkAuth() {
+      const sessionAuth = sessionStorage.getItem(SESSION_KEY);
+      const rememberAuth = localStorage.getItem(REMEMBER_KEY);
+      
+      // 检查会话认证
+      if (sessionAuth === 'authenticated') {
+        return true;
+      }
+      
+      // 检查记住密码认证
+      if (rememberAuth) {
+        try {
+          const authData = JSON.parse(rememberAuth);
+          const expiryTime = new Date(authData.expiry);
+          const now = new Date();
+          
+          if (now < expiryTime) {
+            // 恢复会话认证
+            sessionStorage.setItem(SESSION_KEY, 'authenticated');
+            return true;
+          } else {
+            // 过期了，清除记住的认证
+            localStorage.removeItem(REMEMBER_KEY);
+          }
+        } catch (e) {
+          localStorage.removeItem(REMEMBER_KEY);
+        }
+      }
+      
+      return false;
+    }
+    
+    function redirectToLogin() {
+      window.location.href = './login.html';
+    }
+    
+    function logout() {
+      sessionStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(REMEMBER_KEY);
+      redirectToLogin();
+    }
+    
+    // 页面加载时检查身份验证
+    if (!checkAuth()) {
+      redirectToLogin();
+    }
+    
+    // 简单的页面初始化
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('工具中心首页加载完成');
+      
+      // 绑定登出按钮
+      const logoutBtn = document.getElementById('logoutBtn');
+      if (logoutBtn) {
+        logoutBtn.addEventListener('click', function() {
+          if (confirm('确定要退出登录吗？')) {
+            logout();
+          }
+        });
+        
+        // 鼠标悬停效果
+        logoutBtn.addEventListener('mouseenter', function() {
+          this.style.background = '#f3f4f6';
+          this.style.borderColor = '#d1d5db';
+          this.style.color = 'var(--text)';
+        });
+        
+        logoutBtn.addEventListener('mouseleave', function() {
+          this.style.background = 'var(--panel)';
+          this.style.borderColor = 'var(--border)';
+          this.style.color = 'var(--muted)';
+        });
+      }
+      
+      // 添加登出功能（可选）
+      // 可以通过按 Ctrl+Shift+L 来登出
+      document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && e.shiftKey && e.key === 'L') {
+          if (confirm('确定要退出登录吗？')) {
+            logout();
+          }
+        }
+      });
+    });
+    
+    // 防止通过历史记录绕过认证
+    window.addEventListener('pageshow', function(event) {
+      if (event.persisted && !checkAuth()) {
+        redirectToLogin();
+      }
+    });
+  </script>
+</body>
+</html>

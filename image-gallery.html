@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>批量图片链接展示器 - 工具中心</title>
+  <script>
+    // 身份验证检查
+    const SESSION_KEY = 'toolcenter_auth';
+    const REMEMBER_KEY = 'toolcenter_remember';
+    
+    function checkAuth() {
+      const sessionAuth = sessionStorage.getItem(SESSION_KEY);
+      const rememberAuth = localStorage.getItem(REMEMBER_KEY);
+      
+      if (sessionAuth === 'authenticated') {
+        return true;
+      }
+      
+      if (rememberAuth) {
+        try {
+          const authData = JSON.parse(rememberAuth);
+          const expiryTime = new Date(authData.expiry);
+          const now = new Date();
+          
+          if (now < expiryTime) {
+            sessionStorage.setItem(SESSION_KEY, 'authenticated');
+            return true;
+          } else {
+            localStorage.removeItem(REMEMBER_KEY);
+          }
+        } catch (e) {
+          localStorage.removeItem(REMEMBER_KEY);
+        }
+      }
+      
+      return false;
+    }
+    
+    // 页面加载时检查身份验证
+    if (!checkAuth()) {
+      window.location.href = './login.html';
+    }
+  </script>
+  <style>
+    :root { --cell-size: 240px; --gap: 12px; --radius: 12px;
+      --bg: #ffffff; --panel: #f9f9f9; --text: #333333;
+      --muted: #666666; --accent: #4da3ff; --border: #dddddd;  --nav-h: 52px; }
+    html, body { height: 100%; }
+    body { margin: 0; background: var(--bg); color: var(--text);
+      font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Noto Sans, Helvetica, Arial, "PingFang SC","Hiragino Sans GB","Microsoft YaHei", sans-serif; }
+    .app { display: grid; grid-template-rows: auto auto auto 1fr; gap: 12px; min-height: 100%; }
+    header { padding: 14px 18px; background: var(--panel); border-bottom: 1px solid var(--border); position: sticky;  z-index: 10; }
+    header h1 { font-size: 18px; margin: 0 0 8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .controls, .filters { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; padding: 0 18px 8px; }
+    .controls .row, .filters .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 12px; }
+    label { color: var(--muted); font-size: 12px; }
+    input[type="text"], textarea, select { color: #333333; background: #ffffff; border: 1px solid #dddddd; border-radius: 10px; padding: 8px 10px; outline: none; min-width: 220px; }
+    textarea { width: min(100%, 920px); height: 90px; resize: vertical; }
+    input[type="range"] { width: 180px; }
+    .btn { appearance: none; border: 1px solid #dddddd; background: #ffffff; color: #333333; padding: 8px 12px; border-radius: 12px; cursor: pointer; transition: .15s ease; display:inline-block; }
+    .btn:hover { border-color: #cfcfcf; background: #f7f7f7; transform: translateY(-1px); }
+    .btn[disabled] { opacity: .6; cursor: not-allowed; transform: none; background: #f5f5f5; color: #999999; }
+    .btn.primary { background: #1b65ff; border-color: #1b65ff; color: #ffffff; }
+    .btn.destructive { background: #d64545; border-color: #d64545; color: #ffffff; }
+    .hint { color: var(--muted); font-size: 12px; }
+    .status { font-size: 12px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; }
+    .status.ok { color: #7ce38b; border-color: #2a3a2f; background: #122015; }
+    .status.warn { color: #ffd27f; border-color: #4a3a1a; background: #2a1f0f; }
+    .status.err { color: #ff9aa2; border-color: #4a2a2a; background: #2a1111; }
+    .status.inline { margin-left:6px; }
+
+    .gallery { padding: 12px 18px 38px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--cell-size), 1fr)); gap: var(--gap); align-items: start; }
+    figure.card { margin: 0; padding: 10px; border-radius: 14px; background: var(--panel); border: 1px solid var(--border);
+      display: flex; flex-direction: column; gap: 8px; user-select: none; }
+    .thumb { position: relative; overflow: hidden; border-radius: var(--radius); aspect-ratio: 1 / 1; background: #0c0f15; border: 1px dashed #1f2631;
+      display: grid; place-items: center; cursor: zoom-in; }
+    .thumb img { width: 100%; height: 100%; object-fit: var(--fit, contain); display: block; }
+    .thumb.error { background: #1a1112; border-color: #402427; }
+    .thumb.loading::after { content: "加载中…"; position: absolute; inset: auto 8px 8px auto; font-size: 11px; color: var(--muted);
+      background: rgba(0,0,0,.28); padding: 2px 6px; border-radius: 6px; border: 1px solid #2a3240; }
+    .meta { display: grid; grid-template-columns: 1fr; gap: 6px; font-size: 12px; color: var(--muted); }
+    .meta .title { color: var(--text); font-weight: 600; font-size: 13px; }
+    .badgelist { display: flex; flex-wrap: wrap; gap: 6px; }
+    .badge { font-size: 11px; padding: 3px 8px; border-radius: 999px; border: 1px solid #e5e7eb; background: #f3f4f6; color: #555555; }
+
+    .footer-tip { text-align: center; color: var(--muted); font-size: 12px; padding: 12px 0 24px; }
+    a { color: var(--accent); text-decoration: none; }
+    .kpi { color: var(--muted); font-size: 12px; }
+    .drop { border: 1px dashed var(--border); border-radius: 10px; padding: 8px 10px; color: var(--muted); }
+    .drop.over { border-color: var(--accent); color: var(--text); }
+
+    /* 忙碌遮罩 */
+    .busy { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; align-items: center; justify-content: center; z-index: 99999; }
+    .busy.show { display: flex; }
+    .busy .box { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; display: flex; gap: 10px; align-items: center; color: var(--text); }
+    .spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid #999; border-top-color: transparent; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* 折叠样式 */
+    body.ui-collapsed header .controls,
+    body.ui-collapsed header .filters { display: none; }
+    body.ui-collapsed header { padding-bottom: 8px; }
+    .toolbar-right { margin-left: auto; display: inline-flex; gap: 8px; }
+
+    /* Lightbox */
+    .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.75); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 100000; }
+    .lightbox.open { display: flex; }
+    .lightbox .panel { background: #fdfdfd; border: 1px solid #dddddd; border-radius: 16px; padding: 12px; display: grid; grid-template-columns: minmax(260px, 60vw) 260px; gap: 12px; max-height: 90vh; width: min(92vw, 1080px); color: #333333; }
+    .lightbox .imgwrap { background: #0c0f15; border: 1px solid var(--border); border-radius: 12px; display: grid; place-items: center; overflow: auto; }
+    .lightbox .imgwrap img { max-width: 100%; max-height: 86vh; object-fit: contain; }
+    .lightbox .side { display: grid; grid-template-rows: auto 1fr auto; gap: 12px; }
+    .lightbox .side h3 { margin: 0; font-size: 16px; }
+    .kv { display: grid; grid-template-columns: 90px 1fr; gap: 2px 6px; font-size: 12px; line-height: 1.1; }
+    .kv label { color: #666666; text-align: right; font-weight: 600; }
+    .toolbar { display: flex; gap: 8px; justify-content: flex-end; }
+    .btn.small { padding: 6px 10px; border-radius: 10px; font-size: 12px; }
+  .kv div { color: #333333; background: #f8f9fa; border: 1px solid #eeeeee; padding: 2px 4px; border-radius: 6px; }
+
+/* --- Global Navbar --- */
+.navbar { position: sticky; top: 0; z-index: 9999; background: #ffffff; border-bottom: 1px solid #e5e7eb; }
+.navbar .wrap { display: flex; align-items: center; gap: 10px; padding: 10px 16px; }
+.navbar .brand { font-weight: 700; color: #111827; margin-right: 6px; }
+.navbar .spacer { flex: 1; }
+.navbar a.navlink { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border: 1px solid #e5e7eb; border-radius: 10px; color: #374151; text-decoration: none; font-size: 14px; transition: all 0.2s ease; }
+.navbar a.navlink:hover { background: #f9fafb; border-color: #d1d5db; }
+.navbar a.navlink.active { background: #1b65ff; border-color: #1b65ff; color: #ffffff; }
+
+</style>
+</head>
+<body>
+
+  <nav class="navbar" role="navigation" aria-label="主导航">
+    <div class="wrap">
+      <div class="brand">🛠️ 工具中心</div>
+      <a class="navlink" href="./index.html">首页</a>
+      <a class="navlink active" href="./image-gallery.html" aria-current="page">批量图片展示器</a>
+      <a class="navlink" href="./customer-search.html">客户信息搜索</a>
+      <a class="navlink" href="./customer-card.html">客户信息卡生成器</a>
+      <a class="navlink" href="./script-editor.html">话术编辑器</a>
+      <div class="spacer"></div>
+    </div>
+  </nav>
+
+  <div class="app">
+    <header>
+      <h1>
+        批量图片链接展示器 · v6.7（级联筛选 + 放大详情）
+        <span id="xlsxState" class="status warn" title="离线时不加载，导入 .xlsx 建议改存为 CSV/TSV">XLSX 引擎：未加载</span>
+        <span id="importState" class="status inline">导入：就绪</span>
+        <span id="jsHealth" class="status ok">JS：运行正常</span>
+        <span class="toolbar-right">
+          <button class="btn" id="btnCollapse">折叠工具栏</button>
+          <button class="btn" id="btnFullscreen">全屏</button>
+        </span>
+      </h1>
+      <div class="controls">
+        <div class="row">
+          <textarea id="urlInput" placeholder="粘贴图片直链（每行一个），或点击“导入文件”。支持 //、http(s)://、裸域名（自动补 https://）。"></textarea>
+          <button class="btn primary" id="btnAdd">添加到画廊</button>
+          <button class="btn" id="btnImport">导入文件(TXT/CSV/TSV/XLSX)</button>
+          <button class="btn" id="btnExport">导出所有图片链接</button>
+          <button class="btn" id="btnSample">插入示例</button>
+          <button class="btn destructive" id="btnClear">清空画廊</button>
+          <button class="btn destructive" id="btnClearAll">清空输入+画廊</button>
+        </div>
+        <div class="row">
+          <label>卡片宽度</label>
+          <input type="range" id="size" min="160" max="520" step="10" value="240" />
+          <span class="hint" id="sizeVal">240px</span>
+          <label>间距</label>
+          <input type="range" id="gap" min="0" max="36" step="2" value="12" />
+          <span class="hint" id="gapVal">12px</span>
+          <label>圆角</label>
+          <input type="range" id="radius" min="0" max="24" step="2" value="12" />
+          <span class="hint" id="radiusVal">12px</span>
+          <label>适配</label>
+          <select id="fit">
+            <option value="contain" selected>等比完整(contain)</option>
+            <option value="cover">裁切充满(cover)</option>
+          </select>
+          <label><input type="checkbox" id="dragMode" /> 排序模式(拖拽卡片)</label>
+          <label><input type="checkbox" id="noNetwork" /> 仅显示信息（不加载图片）</label>
+        </div>
+        <div id="dropZone" class="row drop">也可直接拖拽 CSV/TSV/XLSX/TXT 到此区域导入</div>
+        <div class="row hint">表头可用近义词，自动识别：topic_id、标题、示例图片第一个（图片链接/首图/img等）、一级/二级/三级行业、累计定招品数。</div>
+      </div>
+
+      <div class="filters">
+        <div class="card" style="flex:1 1 320px;">
+          <div class="row">
+            <label for="q">搜索标题</label>
+            <input type="text" id="q" placeholder="输入关键词" style="min-width:260px" />
+            <label>一级行业</label>
+            <select id="sel1"><option value="">全部</option></select>
+            <label>二级行业</label>
+            <select id="sel2"><option value="">全部</option></select>
+            <label>三级行业</label>
+            <select id="sel3"><option value="">全部</option></select>
+            <span class="kpi">已筛选：<b id="countFiltered">0</b> / 总数：<b id="countTotal">0</b></span>
+          </div>
+        </div>
+      </div>
+
+    </header>
+
+    <main class="gallery">
+      <div id="grid" class="grid" aria-live="polite"></div>
+      <div class="footer-tip">© 2025 批量图片链接展示器 · 纯前端本地运行，不上传你的数据</div>
+    </main>
+  </div>
+
+  <!-- Busy overlay -->
+  <div id="busy" class="busy" aria-hidden="true">
+    <div class="box"><span class="spinner"></span><span id="busyText">导入中，请稍候…</span></div>
+  </div>
+
+  <!-- Lightbox Modal -->
+  <div id="lightbox" class="lightbox" aria-hidden="true" role="dialog">
+    <div class="panel">
+      <div class="imgwrap"><img id="lbImg" alt="preview" /></div>
+      <div class="side">
+        <h3 id="lbTitle">(无标题)</h3>
+        <div class="kv">
+          <label>topic_id</label><div id="lbTopic">-</div>
+          <label>一级行业</label><div id="lbC1">-</div>
+          <label>二级行业</label><div id="lbC2">-</div>
+          <label>三级行业</label><div id="lbC3">-</div>
+          <label>累计定招品数</label><div id="lbCnt">-</div>
+          <label>图片链接</label><div><a id="lbHref" href="#" target="_blank" rel="noreferrer noopener">在新标签打开</a></div>
+        </div>
+        <div class="toolbar">
+          <button class="btn small" id="btnCopy">复制链接</button>
+          <button class="btn small" id="btnOpenNew">新标签打开</button>
+          <button class="btn small" id="btnClose">关闭</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function loadXLSX(){
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js';
+      s.async = true;
+      s.onload = function(){ const x=document.getElementById('xlsxState'); if(x){ x.textContent='XLSX 引擎：已加载'; x.className='status ok'; } };
+      s.onerror = function(){ const x=document.getElementById('xlsxState'); if(x){ x.textContent='XLSX 引擎：未加载（离线CSV可用）'; x.className='status warn'; } };
+      document.head.appendChild(s);
+    })();
+  </script>
+
+  <script>
+  'use strict';
+  (function(){
+    const $ = (sel, el=document) => el.querySelector(sel);
+    const $$ = (sel, el=document) => Array.from(el.querySelectorAll(sel));
+    const jsHealth = $('#jsHealth');
+    const importState = $('#importState');
+    const busy = $('#busy'); const busyText = $('#busyText');
+
+    function markHealth(ok, msg){
+      if(!jsHealth) return;
+      jsHealth.className = 'status ' + (ok ? 'ok' : 'err');
+      jsHealth.textContent = 'JS：' + (msg || (ok ? '运行正常' : '异常'));
+    }
+
+    try {
+      const safeStorage = { get(k){try{return localStorage.getItem(k)}catch(e){return null}}, set(k,v){try{localStorage.setItem(k,v)}catch(e){}} };
+
+      const state = {
+        items: /** @type {Array<{img:string, topic_id?:string, 标题?:string, 一级行业?:string, 二级行业?:string, 三级行业?:string, 累计定招品数?:string}>} */([]),
+        fit: safeStorage.get('fit') || 'contain', size: +(safeStorage.get('size') || 240), gap: +(safeStorage.get('gap') || 12), radius: +(safeStorage.get('radius') || 12),
+        noNetwork: safeStorage.get('noNetwork') === '1', dragMode: false,
+        q: '', sel1: '', sel2: '', sel3: '',
+      };
+
+      let lastRendered = [];
+
+      const grid = $('#grid'); const countTotalEl = $('#countTotal'); const countFilteredEl = $('#countFiltered');
+
+      function setImportState(cls, msg){
+        if (!importState) return;
+        importState.className = 'status inline ' + (cls||'');
+        importState.textContent = '导入：' + msg;
+      }
+      function setBusy(v, msg){
+        $$('.btn, input, select, textarea').forEach(el => {
+          if (el.id && el.id.startsWith('ephemeralFile')) return;
+          if (el.tagName === 'BUTTON') el.disabled = !!v;
+        });
+        if (busy){ busy.classList.toggle('show', !!v); busy.setAttribute('aria-hidden', String(!v)); }
+        if (busyText && msg) busyText.textContent = msg;
+      }
+
+      function normalizeUrl(u){
+        try{
+          if(u==null) return '';
+          u = String(u).trim();
+          if(!u) return '';
+          if(u.startsWith('//')) return 'https:' + u;
+          if(/^[\w.-]+\.[A-Za-z]{2,}(?::\d{2,5})?\/.+/i.test(u)) return 'https://' + u;
+          if(/^data:image\//i.test(u)) return u;
+          if(!/^https?:\/\//i.test(u)) return '';
+          return u;
+        }catch{ return ''; }
+      }
+
+      function parseCSVorTSV(text){
+        text = text.replace(/^\uFEFF/, '');
+        const first = (text.split(/\r?\n/).find(l => l.trim().length) || '');
+        const sep = ((first.match(/\t/g)||[]).length > (first.match(/,/g)||[]).length) ? '\t' : ',';
+        function parseDSV(str, d){
+          const rows=[]; let row=[], field='', inQ=false;
+          for(let i=0;i<str.length;i++){
+            const c=str[i], n=str[i+1];
+            if(inQ){
+              if(c === '"' && n === '"'){ field+='"'; i++; continue; }
+              if(c === '"'){ inQ = false; continue; }
+              field += c;
+            }else{
+              if(c === '"'){ inQ = true; continue; }
+              if(c === d){ row.push(field); field=''; continue; }
+              if(c === '\n'){ row.push(field); rows.push(row); row=[]; field=''; continue; }
+              if(c === '\r'){ continue; }
+              field += c;
+            }
+          }
+          row.push(field); rows.push(row);
+          return rows.filter(r=>r.some(x=>String(x).trim().length));
+        }
+        const rows = parseDSV(text, sep);
+        if(!rows.length) return [];
+        return { header: rows[0], body: rows.slice(1) };
+      }
+
+      const ALIASES = {
+        'topic_id':['topic_id','topicid','topic id','id','编号','主题id','话题id'],
+        '标题':['标题','title','题目','名称','主题','topic','name'],
+        '示例图片第一个':['示例图片第一个','示例图片','图片链接','首图','第一张图片','图片','image','img','picture','pic','thumb','thumbnail','封面'],
+        '一级行业':['一级行业','一级类目','一级','行业1','cat1','category1','一级分类'],
+        '二级行业':['二级行业','二级类目','二级','行业2','cat2','category2','二级分类'],
+        '三级行业':['三级行业','三级类目','三级','行业3','cat3','category3','三级分类'],
+        '累计定招品数':['累计定招品数','累计定招品','定招品数','总定招品数','总数','count','数量','件数','累计数']
+      };
+      const REQUIRED = ['示例图片第一个'];
+      const hnorm = s => String(s||'').toLowerCase().replace(/\s+/g,'').replace(/[_\-–—]/g,'').replace(/[（）()\[\]【】、，,。.;；:：'"\u201c\u201d\u2018\u2019]/g,'');
+      function findIndexByAliases(header, alias){ const nh = header.map(h=>hnorm(h)); for(const a of alias){ const idx=nh.indexOf(hnorm(a)); if(idx!==-1) return idx; } return -1; }
+      function mapRowsToRecords(header, body){
+        const idxMap={}; for(const k in ALIASES){ idxMap[k]=findIndexByAliases(header, ALIASES[k]); }
+        for(const req of REQUIRED){ if(idxMap[req]===-1) throw new Error('缺少关键列：'+req+'（可用别名：'+ALIASES[req].join('/')+'）'); }
+        const out=[];
+        for(const cols of body){
+          const rec={
+            topic_id: idxMap['topic_id']>=0?cols[idxMap['topic_id']]:'' ,
+            标题: idxMap['标题']>=0?cols[idxMap['标题']]:'' ,
+            img: normalizeUrl(idxMap['示例图片第一个']>=0?cols[idxMap['示例图片第一个']]:''),
+            一级行业: idxMap['一级行业']>=0?cols[idxMap['一级行业']]:'' ,
+            二级行业: idxMap['二级行业']>=0?cols[idxMap['二级行业']]:'' ,
+            三级行业: idxMap['三级行业']>=0?cols[idxMap['三级行业']]:'' ,
+            累计定招品数: idxMap['累计定招品数']>=0?cols[idxMap['累计定招品数']]:''
+          };
+          if(rec.img) out.push(rec);
+        }
+        return out;
+      }
+      function parseCSV(text){ const parsed=parseCSVorTSV(text); if(!parsed||!parsed.header) return []; return mapRowsToRecords(parsed.header, parsed.body); }
+
+      async function parseXLSXFile(file){
+        if (typeof XLSX === 'undefined'){ throw new Error('未检测到 XLSX 引擎。请联网后重试，或在 Excel 中另存为 CSV/TSV 再导入。'); }
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: 'array' });
+        const usedSheets = []; let total = 0, firstHeaders = [];
+        for (const name of wb.SheetNames){
+          const ws = wb.Sheets[name];
+          const rows = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false });
+          if (!rows || !rows.length) continue;
+          const header = rows[0].map(x=>String(x||''));
+          if (!firstHeaders.length) firstHeaders = header;
+          const body = rows.slice(1).map(r => header.map((_,i)=> String(r[i] ?? '')));
+          try {
+            const recs = mapRowsToRecords(header, body);
+            usedSheets.push(name);
+            total += recs.length;
+            state.items = state.items.concat(recs);
+          } catch(e){ /* 忽略未匹配的表 */ }
+        }
+        if (!total){ throw new Error('所有工作表均未匹配到需要的列。示例表头：' + JSON.stringify(firstHeaders)); }
+        return { usedSheets, total };
+      }
+
+      function savePrefs(){ safeStorage.set('fit', state.fit); safeStorage.set('size', String(state.size)); safeStorage.set('gap', String(state.gap)); safeStorage.set('radius', String(state.radius)); safeStorage.set('noNetwork', state.noNetwork?'1':'0'); }
+      function applyVars(){
+        document.documentElement.style.setProperty('--cell-size', state.size+'px');
+        document.documentElement.style.setProperty('--gap', state.gap+'px');
+        document.documentElement.style.setProperty('--radius', state.radius+'px');
+        document.documentElement.style.setProperty('--fit', state.fit);
+        const sz=$('#sizeVal'), gp=$('#gapVal'), rd=$('#radiusVal');
+        if(sz) sz.textContent=state.size+'px'; if(gp) gp.textContent=state.gap+'px'; if(rd) rd.textContent=state.radius+'px';
+        savePrefs();
+      }
+
+      // 统计排序：用于一级行业按数量降序
+      function sortByFreq(values){
+        const freq = new Map();
+        for(const v of values){ const key=(v||'').trim(); if(!key) continue; freq.set(key, (freq.get(key)||0)+1); }
+        return Array.from(freq.entries()).sort((a,b)=> b[1]-a[1] ).map(([k])=>k);
+      }
+      function uniqAlpha(list){ return Array.from(new Set(list.filter(Boolean).map(s=>String(s).trim()))).sort((a,b)=>a.localeCompare(b,'zh-Hans-CN')); }
+
+      function refreshFilterOptionsCascading(){
+        const sel1=$('#sel1'), sel2=$('#sel2'), sel3=$('#sel3'); if(!sel1||!sel2||!sel3) return;
+        const s1=state.sel1||'', s2=state.sel2||'', s3=state.sel3||''; const all=state.items;
+
+        // 一级行业：按频次降序
+        const opts1 = sortByFreq(all.map(x=>x.一级行业));
+        // 二级：跟随一级筛选后，使用字典序
+        const items2 = s1 ? all.filter(x=>x.一级行业===s1) : all; const opts2 = uniqAlpha(items2.map(x=>x.二级行业));
+        // 三级：跟随二级筛选后，使用字典序
+        const items3 = s2 ? items2.filter(x=>x.二级行业===s2) : items2; const opts3 = uniqAlpha(items3.map(x=>x.三级行业));
+
+        function fill(sel, opts, cur){
+          sel.innerHTML='';
+          const mk=(v,t)=>{ const o=document.createElement('option'); o.value=v; o.textContent=t||v||'全部'; return o; };
+          sel.appendChild(mk('', '全部'));
+          opts.forEach(v=>sel.appendChild(mk(v)));
+          sel.value = opts.includes(cur) ? cur : '';
+        }
+
+        fill(sel1, opts1, s1);
+        const newS1Valid = opts1.includes(s1); let ns2=s2, ns3=s3; if(!newS1Valid){ ns2=''; ns3=''; }
+        fill(sel2, opts2, ns2);
+        const newS2Valid = opts2.includes(ns2); if(!newS2Valid){ ns3=''; }
+        fill(sel3, opts3, ns3);
+        state.sel1 = sel1.value; state.sel2 = sel2.value; state.sel3 = sel3.value;
+      }
+
+      function applyFilters(list){
+        const q=(state.q||'').toLowerCase(); const f1=state.sel1||''; const f2=state.sel2||''; const f3=state.sel3||'';
+        return list.filter(x=>{
+          const byTitle = q ? String(x.标题||'').toLowerCase().includes(q) : true;
+          const by1 = f1? x.一级行业===f1 : true;
+          const by2 = f2? x.二级行业===f2 : true;
+          const by3 = f3? x.三级行业===f3 : true;
+          return byTitle && by1 && by2 && by3;
+        });
+      }
+
+      function render(){
+        applyVars();
+        if(countTotalEl) countTotalEl.textContent=String(state.items.length);
+        const data = applyFilters(state.items);
+        lastRendered = data;
+        if(countFilteredEl) countFilteredEl.textContent=String(data.length);
+        if(!grid) return;
+        grid.innerHTML='';
+        data.forEach((rec,idx)=>{
+          const fig=document.createElement('figure'); fig.className='card'; fig.draggable=!!state.dragMode; fig.dataset.idx=String(idx);
+          const box=document.createElement('div'); box.className='thumb loading';
+          const img=document.createElement('img');
+          img.loading='lazy'; img.decoding='async';
+          img.alt = rec.标题 ? (rec.标题+'-'+(idx+1)) : ('image-'+(idx+1));
+          img.referrerPolicy='no-referrer'; img.crossOrigin='anonymous';
+          if(!state.noNetwork){ img.src=rec.img; } else { box.classList.remove('loading'); box.style.borderStyle='solid'; const tip=document.createElement('div'); tip.style.fontSize='12px'; tip.style.color='var(--muted)'; tip.textContent='已禁用图片加载'; box.appendChild(tip); }
+          img.addEventListener('load',()=>box.classList.remove('loading'));
+          img.addEventListener('error',()=>{ box.classList.remove('loading'); box.classList.add('error'); });
+          box.appendChild(img); fig.appendChild(box);
+          const meta=document.createElement('div'); meta.className='meta';
+          const title=document.createElement('div'); title.className='title'; title.textContent=(rec.标题||'(无标题)');
+          const idline=document.createElement('div'); idline.textContent=`topic_id：${rec.topic_id||'-'}`;
+          const badges=document.createElement('div'); badges.className='badgelist'; const b=document.createElement('span'); b.className='badge'; b.textContent=`累计定招品数: ${rec.累计定招品数||'-'}`; badges.appendChild(b);
+          meta.appendChild(title); meta.appendChild(idline); meta.appendChild(badges);
+          fig.appendChild(meta);
+          grid.appendChild(fig);
+        });
+      }
+
+      // Lightbox
+      const lb = $('#lightbox'); const lbImg=$('#lbImg'); const lbTitle=$('#lbTitle'); const lbTopic=$('#lbTopic'); const lbC1=$('#lbC1'); const lbC2=$('#lbC2'); const lbC3=$('#lbC3'); const lbCnt=$('#lbCnt'); const lbHref=$('#lbHref');
+      function openLightbox(rec){ if(!lb) return; lb.classList.add('open'); lb.setAttribute('aria-hidden','false'); if(lbImg){ lbImg.src=rec.img; lbImg.alt=rec.标题||'preview'; } if(lbTitle) lbTitle.textContent=rec.标题||'(无标题)'; if(lbTopic) lbTopic.textContent=rec.topic_id||'-'; if(lbC1) lbC1.textContent=rec.一级行业||'-'; if(lbC2) lbC2.textContent=rec.二级行业||'-'; if(lbC3) lbC3.textContent=rec.三级行业||'-'; if(lbCnt) lbCnt.textContent=rec.累计定招品数||'-'; if(lbHref){ lbHref.href=rec.img; lbHref.onclick=(e)=>{ e.stopPropagation(); }; }
+        document.addEventListener('keydown', onEsc, { once: true }); }
+      function closeLightbox(){ if(!lb) return; lb.classList.remove('open'); lb.setAttribute('aria-hidden','true'); if(lbImg) lbImg.removeAttribute('src'); }
+      function onEsc(e){ if(e.key==='Escape') closeLightbox(); }
+      if(lb){ lb.addEventListener('click',(e)=>{ if(e.target===lb) closeLightbox(); }); $('#btnClose')?.addEventListener('click',()=>closeLightbox()); $('#btnOpenNew')?.addEventListener('click',()=>{ if(lbHref&&lbHref.href) window.open(lbHref.href,'_blank'); }); $('#btnCopy')?.addEventListener('click',async()=>{ try{ await navigator.clipboard.writeText(lbHref.href); alert('已复制链接'); }catch{ prompt('复制失败，请手动复制：', lbHref.href); } }); }
+
+      if(grid){
+        grid.addEventListener('click', (e)=>{
+          const fig = e.target.closest('figure.card');
+          if(!fig) return;
+          const idx = +fig.dataset.idx;
+          const rec = lastRendered[idx];
+          if(rec) openLightbox(rec);
+        });
+        grid.addEventListener('dblclick', (e)=>{
+          const fig = e.target.closest('figure.card');
+          if(!fig) return;
+          const idx = +fig.dataset.idx;
+          const rec = lastRendered[idx];
+          if(rec) openLightbox(rec);
+        });
+      }
+
+      // 折叠/全屏
+      const btnCollapse = $('#btnCollapse');
+      btnCollapse?.addEventListener('click', ()=>{
+        document.body.classList.toggle('ui-collapsed');
+        btnCollapse.textContent = document.body.classList.contains('ui-collapsed') ? '展开工具栏' : '折叠工具栏';
+      });
+      document.addEventListener('keydown', (e)=>{ if(e.key === '`'){ e.preventDefault(); btnCollapse?.click(); } });
+
+      const btnFullscreen = $('#btnFullscreen');
+      const root = document.documentElement;
+      btnFullscreen?.addEventListener('click', async ()=>{
+        try{
+          if(!document.fullscreenElement){
+            await (document.body.requestFullscreen ? document.body.requestFullscreen() : root.requestFullscreen());
+            btnFullscreen.textContent = '退出全屏';
+          }else{
+            await document.exitFullscreen();
+            btnFullscreen.textContent = '全屏';
+          }
+        }catch(e){ alert('全屏切换失败：' + (e.message||e)); }
+      });
+      document.addEventListener('fullscreenchange', ()=>{ if(!document.fullscreenElement) btnFullscreen.textContent = '全屏'; });
+
+      // 导入/导出 + 基础交互
+      async function openFileDialog(){
+        setImportState('', '等待选择…');
+        if (window.showOpenFilePicker){
+          try {
+            const handles = await window.showOpenFilePicker({
+              multiple: false,
+              types: [{ description:'文件', accept:{ 'text/plain':['.txt','.csv','.tsv'], 'text/csv':['.csv','.tsv'], 'application/vnd.ms-excel':['.xls'], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx'] } }]
+            });
+            if (handles && handles[0]){
+              const file = await handles[0].getFile();
+              await handlePickedFile(file);
+              return;
+            }
+          } catch (e) { }
+        }
+        // 文件输入功能已禁用
+        setImportState('warn', '文件导入功能已禁用，请使用拖拽或粘贴功能。');
+      }
+
+      async function handlePickedFile(file){
+        try{
+          if(!file) return;
+          setBusy(true, '导入中，请稍候…');
+          setImportState('', '处理中…');
+          const name = (file.name||'').toLowerCase();
+          if(/\.(xlsx|xls)$/.test(name)){
+            const res = await parseXLSXFile(file);
+            alert('已导入 '+res.total+' 条，来自工作表：'+res.usedSheets.join(', '));
+          } else if(/\.(csv|tsv)$/.test(name)){
+            const text=await file.text(); const recs=parseCSV(text); state.items=state.items.concat(recs); alert('已导入 '+recs.length+' 条记录');
+          } else if(/\.(txt)$/.test(name)){
+            const text=await file.text();
+            const urls=text.replace(/^\uFEFF/,'').split(/\r?\n|,|\s+/g).map(normalizeUrl).filter(Boolean);
+            const added = Array.from(new Set(urls)).map(u=>({img:u}));
+            state.items=state.items.concat(added); alert('已导入链接 '+added.length+' 条');
+          } else { alert('不支持的文件类型：' + name); setImportState('err','不支持的类型'); return; }
+          refreshFilterOptionsCascading(); render();
+          setImportState('ok', '成功');
+        }catch(err){ console.error(err); setImportState('err','失败'); alert('导入失败：' + (err.message||err)); }
+        finally { setBusy(false); }
+      }
+
+      $('#btnAdd')?.addEventListener('click',()=>{
+        const ta=$('#urlInput'); const raw=(ta&&ta.value)||'';
+        const parts=raw.split(/\r?\n|,|\s+/g).map(normalizeUrl).filter(Boolean);
+        const urls=Array.from(new Set(parts)); if(!urls.length){ alert('没有识别到有效图片链接'); return; }
+        state.items=state.items.concat(urls.map(u=>({img:u}))); refreshFilterOptionsCascading(); render();
+      });
+      $('#urlInput')?.addEventListener('keydown',(e)=>{ if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){ $('#btnAdd')?.click(); } });
+      $('#btnSample')?.addEventListener('click',()=>{
+        const ta=$('#urlInput'); if(!ta) return;
+        const s=`//sc02.alicdn.com/kf/Hbb5f936a288f4ffeafd26f2a709d8883G.jpg
+sc02.alicdn.com/kf/H2f432b7c7a4a4adfb18e2e6a5b2f28a8q.jpg`;
+        ta.value=`${s}
+${ta.value||''}`.trim();
+      });
+
+      $('#btnClear')?.addEventListener('click',()=>{ if(confirm('清空画廊？')){ state.items=[]; refreshFilterOptionsCascading(); render(); } });
+      $('#btnClearAll')?.addEventListener('click',()=>{ if(confirm('清空输入与画廊？')){ state.items=[]; const ta=$('#urlInput'); if(ta) ta.value=''; refreshFilterOptionsCascading(); render(); } });
+
+      $('#btnImport')?.addEventListener('click', async ()=>{ await openFileDialog(); });
+      $('#btnExport')?.addEventListener('click',()=>{
+        const links=state.items.map(x=>x.img).filter(Boolean);
+        const blob=new Blob([links.join('\n')],{type:'text/plain;charset=utf-8'});
+        const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='image-links.txt'; a.click(); URL.revokeObjectURL(a.href);
+      });
+
+      $('#fit')?.addEventListener('change',(e)=>{ state.fit=e.target.value; applyVars(); });
+      $('#size')?.addEventListener('input',(e)=>{ state.size=+e.target.value; applyVars(); });
+      $('#gap')?.addEventListener('input',(e)=>{ state.gap=+e.target.value; applyVars(); });
+      $('#radius')?.addEventListener('input',(e)=>{ state.radius=+e.target.value; applyVars(); });
+      $('#noNetwork')?.addEventListener('change',(e)=>{ state.noNetwork=e.target.checked; safeStorage.set('noNetwork', state.noNetwork?'1':'0'); render(); });
+      $('#dragMode')?.addEventListener('change',(e)=>{ state.dragMode=e.target.checked; render(); });
+
+      $('#sel1')?.addEventListener('change',(e)=>{ state.sel1=e.target.value||''; refreshFilterOptionsCascading(); render(); });
+      $('#sel2')?.addEventListener('change',(e)=>{ state.sel2=e.target.value||''; refreshFilterOptionsCascading(); render(); });
+      $('#sel3')?.addEventListener('change',(e)=>{ state.sel3=e.target.value||''; render(); });
+      $('#q')?.addEventListener('input',(e)=>{ state.q=e.target.value||''; render(); });
+
+      try{ applyVars(); refreshFilterOptionsCascading(); render(); markHealth(true, '运行正常'); } catch(err){ markHealth(false, '初始化失败'); alert('初始化失败：'+(err.message||err)); }
+
+      window.addEventListener('error',(ev)=>{ console.error('[error]', ev.message||ev.error); markHealth(false, 'JS错误'); });
+      window.addEventListener('unhandledrejection',(ev)=>{ console.error('[promise]', ev.reason); markHealth(false, '异步错误'); });
+    } catch (bootErr) {
+      console.error('启动失败', bootErr);
+      markHealth(false, '启动异常');
+    }
+  })();
+  </script>
+</body>
+</html>

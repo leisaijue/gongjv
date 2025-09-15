@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>客户信息搜索工具 - 工具中心</title>
+  <script>
+    // 身份验证检查
+    const SESSION_KEY = 'toolcenter_auth';
+    const REMEMBER_KEY = 'toolcenter_remember';
+    
+    function checkAuth() {
+      const sessionAuth = sessionStorage.getItem(SESSION_KEY);
+      const rememberAuth = localStorage.getItem(REMEMBER_KEY);
+      
+      if (sessionAuth === 'authenticated') {
+        return true;
+      }
+      
+      if (rememberAuth) {
+        try {
+          const authData = JSON.parse(rememberAuth);
+          const expiryTime = new Date(authData.expiry);
+          const now = new Date();
+          
+          if (now < expiryTime) {
+            sessionStorage.setItem(SESSION_KEY, 'authenticated');
+            return true;
+          } else {
+            localStorage.removeItem(REMEMBER_KEY);
+          }
+        } catch (e) {
+          localStorage.removeItem(REMEMBER_KEY);
+        }
+      }
+      
+      return false;
+    }
+    
+    // 页面加载时检查身份验证
+    if (!checkAuth()) {
+      window.location.href = './login.html';
+    }
+  </script>
+  <style>
+    :root { --nav-h: 52px; --panel:#ffffff; --border:#e5e7eb; --text:#111827; --muted:#6b7280; --accent:#1b65ff; }
+    body { margin:0; font:14px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, 'PingFang SC','Hiragino Sans GB','Microsoft YaHei', sans-serif; color:var(--text); background:#fff; }
+    .navbar { position: sticky; top: 0; z-index: 9999; background:#fff; border-bottom:1px solid var(--border); }
+    .navbar .wrap { display:flex; align-items:center; gap:10px; padding:10px 16px; }
+    .navbar .brand { font-weight:700; color:#111827; margin-right:6px; }
+    .navbar a, .navbar .navlink { display:inline-flex; align-items:center; gap:6px; padding:8px 16px; border:1px solid var(--border); border-radius:10px; text-decoration:none; color:#374151; transition: all 0.2s ease; font-size: 14px; }
+    .navbar a:hover, .navbar .navlink:hover { background: #f3f4f6; border-color: #d1d5db; transform: translateY(-1px); }
+    .navbar a.active, .navbar .navlink.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+    header.pagehead { padding:12px 16px; border-bottom:1px solid var(--border); position:sticky; top:var(--nav-h); background:#fff; z-index:5; }
+    header.pagehead h1 { margin:0 0 6px; font-size:18px; }
+    .controls, .filters { display:flex; flex-wrap:wrap; gap:10px 12px; align-items:center; padding:10px 16px; }
+    .controls .row { display:flex; gap:10px 12px; align-items:center; flex-wrap:wrap; }
+    .btn { appearance:none; border:1px solid var(--border); background:#fff; color:#333; padding:8px 12px; border-radius:12px; cursor:pointer; transition:.15s; }
+    .btn:hover { border-color:#cfcfcf; background:#f7f7f7; transform:translateY(-1px); }
+    .btn.primary { background:#1b65ff; border-color:#1b65ff; color:#fff; }
+    .btn.destructive { background:#d64545; border-color:#d64545; color:#fff; }
+    label { font-size:12px; color:var(--muted); }
+    input[type="text"], select { color:#111827; background:#fff; border:1px solid var(--border); border-radius:10px; padding:8px 10px; outline:none; min-width:220px; }
+    .status { font-size:12px; padding:2px 8px; border:1px solid var(--border); border-radius:999px; }
+    .status.ok { color:#16a34a; border-color:#b7e4c7; background:#ecfdf5; }
+    .status.warn { color:#b45309; border-color:#fcd34d; background:#fffbeb; }
+    .status.err { color:#b91c1c; border-color:#fecaca; background:#fef2f2; }
+    .colpicker { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:10px; padding:0 16px 10px; max-height:300px; overflow-y:auto; }
+    .colchip { display:inline-flex; align-items:center; gap:8px; border:1px solid var(--border); border-radius:8px; padding:8px 12px; background:#f9fafb; transition:all 0.2s ease; cursor:pointer; }
+    .colchip:hover { background:#f3f4f6; border-color:#d1d5db; transform:translateY(-1px); }
+    .colchip.checked { background:#dbeafe; border-color:#3b82f6; }
+    .colchip input[type="checkbox"] { margin:0; }
+    .colchip .col-name { font-size:13px; font-weight:500; }
+    .col-search-box { padding:0 16px 10px; }
+    .col-search-input { width:100%; max-width:400px; margin-bottom:8px; }
+    .col-categories { display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+    .col-category-btn { padding:4px 12px; border:1px solid var(--border); border-radius:20px; background:#fff; cursor:pointer; font-size:12px; transition:all 0.2s; }
+    .col-category-btn:hover { background:#f3f4f6; }
+    .col-category-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+    .col-stats { font-size:12px; color:var(--muted); margin-top:8px; }
+    .table-responsive { overflow-x:auto; }
+    .table-responsive table { min-width:600px; }
+    .tablewrap { padding:0 16px 24px; }
+    table { width:100%; border-collapse:separate; border-spacing:0; }
+    thead th { position:sticky; top:calc(var(--nav-h) + 144px); background:#fff; z-index:2; border-bottom:1px solid var(--border); padding:8px; font-weight:600; font-size:12px; color:#374151; text-align:left; cursor:pointer; }
+    tbody td { border-bottom:1px solid #f1f5f9; padding:8px; font-size:13px; color:#111827; }
+    tbody tr { cursor:pointer; }
+    tbody tr:hover { background:#f3f6fb; }
+    .drop { border:1px dashed var(--border); border-radius:10px; padding:8px 10px; color:var(--muted); margin:0 16px 8px 16px; }
+    .drop.over { border-color:var(--accent); color:#111827; }
+    .footer-tip { text-align:center; color:var(--muted); font-size:12px; padding:12px 0 24px; }
+    .lightbox { position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; align-items:center; justify-content:center; padding:20px; z-index:99999; }
+    .lightbox.open { display:flex; }
+    .lightbox .panel { background:#fff; border:1px solid var(--border); border-radius:16px; padding:16px; width:min(92vw,980px); color:#111827; }
+    .report-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+    .report-title { font-size:18px; font-weight:700; }
+    .report-grid { display:grid; grid-template-columns:160px 1fr; gap:6px 10px; }
+    .report-grid label { color:#6b7280; text-align:right; font-weight:600; }
+    .report-grid .val { background:#f9fafb; border:1px solid #e5e7eb; padding:6px 8px; border-radius:8px; }
+    .report-toolbar { display:flex; gap:8px; justify-content:flex-end; margin-top:12px; }
+  </style>
+
+  <!-- Robust XLSX loader -->
+  <script>
+  (function(){
+    var statusEl;
+    function setStatus(txt, cls){
+      if(!statusEl){ statusEl = document.getElementById('xlsxState') || document.getElementById('fileInfo'); }
+      if(!statusEl) return;
+      var isFileInfo = statusEl.id === 'fileInfo';
+      statusEl.textContent = isFileInfo ? txt.replace(/^XLSX\s*/, '') : ('XLSX 引擎：' + txt);
+      statusEl.className = 'status ' + (isFileInfo ? (cls||'') : ('inline ' + (cls||'')));
+    }
+    if (typeof XLSX !== 'undefined'){ setStatus('已加载','ok'); return; }
+    var sources = [
+      './xlsx.full.min.js',
+      '/xlsx.full.min.js',
+      (location && location.origin ? (location.origin + '/xlsx.full.min.js') : ''),
+      'https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js',
+      'https://unpkg.com/xlsx/dist/xlsx.full.min.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'
+    ];
+    var i = 0;
+    function next(){
+      if (typeof XLSX !== 'undefined'){ setStatus('已加载','ok'); return; }
+      if (i >= sources.length){ setStatus('未加载（请把 xlsx.full.min.js 放在与 HTML 同目录）','warn'); return; }
+      var src = sources[i++];
+      if(!src){ next(); return; }
+      setStatus('加载中…（尝试源：' + src + '）','warn');
+      var s = document.createElement('script');
+      s.src = src; s.async = true; s.crossOrigin = 'anonymous';
+      var timer = setTimeout(function(){ s.onerror && s.onerror(); }, 10000);
+      s.onload = function(){ clearTimeout(timer); if (typeof XLSX==='undefined'){ next(); } else { setStatus('已加载','ok'); } };
+      s.onerror = function(){ clearTimeout(timer); next(); };
+      document.head.appendChild(s);
+    }
+    next();
+  })();
+  </script>
+</head>
+<body>
+  <nav class="navbar"><div class="wrap">
+    <div class="brand">🛠️ 工具中心</div>
+    <a class="navlink" href="./index.html">首页</a>
+    <a class="navlink" href="./image-gallery.html">批量图片展示器</a>
+    <a class="navlink active" href="./customer-search.html" aria-current="page">客户信息搜索</a>
+    <a class="navlink" href="./customer-card.html">客户信息卡生成器</a>
+    <a class="navlink" href="./script-editor.html">话术编辑器</a>
+    <div style="flex:1"></div>
+  </div></nav>
+
+  <header class="pagehead">
+    <h1>页面二：客户信息搜索（稳定版）</h1>
+    <div class="status" id="xlsxState">XLSX 引擎：初始化</div>
+  </header>
+
+  <section class="controls">
+    <div class="row">
+      <button class="btn primary" id="btnImport">导入表格文件 (XLSX/CSV/TSV)</button>
+      <div id="fileInfo" class="status warn">未加载数据</div>
+      <div style="margin-left:auto; display:inline-flex; gap:8px;">
+        <label>每页</label>
+        <select id="pageSize"><option>20</option><option selected>50</option><option>100</option><option>200</option></select>
+        <button class="btn" id="btnExport">导出筛选结果 (CSV)</button>
+        <button class="btn destructive" id="btnClear">清空数据</button>
+      </div>
+    </div>
+    <div class="row">
+      <label>客户名称列</label>
+      <select id="nameCol" style="min-width:220px"></select>
+      <label>搜索客户名称</label>
+      <input type="text" id="nameQ" placeholder="输入客户名称关键词，支持多关键词 空格分隔" style="min-width:360px" />
+      <span style="color:#6b7280;font-size:12px;">已筛选：<b id="countFiltered">0</b> / 总数：<b id="countTotal">0</b></span>
+    </div>
+  </section>
+
+  <div id="dropZone" class="drop">拖拽 Excel/CSV/TSV 文件到此区域导入（或点击此区域）</div>
+
+  <section class="filters">
+    <div style="padding:0 16px; display:flex; justify-content:space-between; align-items:center; width:100%;">
+      <div>
+        <label>选择展示的列</label>
+        <div style="color:#6b7280;font-size:12px;">勾选/取消列名，立即生效；支持排序（点击表头）。</div>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn" id="btnSelectAll">全选</button>
+        <button class="btn" id="btnInvert">反选</button>
+        <button class="btn" id="btnDefaultCols">常用列</button>
+        <button class="btn" id="btnToggleCollapse">收起/展开</button>
+      </div>
+    </div>
+    
+    <div class="col-search-box">
+      <input type="text" id="colSearchInput" class="col-search-input" placeholder="搜索列名..." />
+      <div class="col-categories" id="colCategories"></div>
+      <div class="col-stats" id="colStats">已选择 0 列</div>
+    </div>
+    
+    <div id="colPicker" class="colpicker"></div>
+  </section>
+
+  <main class="tablewrap">
+    <div class="table-responsive">
+      <table id="tbl"><thead><tr id="theadRow"></tr></thead><tbody id="tbody"></tbody></table>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px; padding:8px 0 0;">
+      <button class="btn" id="prev">上一页</button>
+      <button class="btn" id="next">下一页</button>
+      <span style="color:#6b7280;font-size:12px;">第 <b id="pageIdx">1</b> / <b id="pageTotal">1</b> 页</span>
+    </div>
+    <div class="footer-tip">© 2025 客户信息搜索 · 纯前端本地运行，不上传你的数据</div>
+  </main>
+
+  <div id="detail" class="lightbox" aria-hidden="true" role="dialog">
+    <div class="panel" id="reportPanel">
+      <div class="report-head">
+        <div class="report-title" id="reportTitle">客户信息汇总</div>
+        <div class="report-toolbar">
+          <button class="btn" id="btnCopy">复制为文本</button>
+          <button class="btn" id="btnSavePng">导出为PNG</button>
+          <button class="btn destructive" id="btnClose">关闭</button>
+        </div>
+      </div>
+      <div class="report-grid" id="reportGrid"></div>
+    </div>
+  </div>
+
+  <script>
+  (function(){
+    // Tiny helpers
+    function $(sel, el){ return (el||document).querySelector(sel); }
+    function $all(sel, el){ return Array.prototype.slice.call((el||document).querySelectorAll(sel)); }
+
+    var state = { raw: [], columns: [], visibleCols: {}, pageSize: 50, page: 1, loadToken: 0,
+      sort: { key: '', dir: 1 }, nameCol: '', nameQ: '', colSearch: '', collapseColumns: false
+    };
+
+    var fileInfo = $('#fileInfo');
+    var nameColSel = $('#nameCol');
+    var nameQ = $('#nameQ');
+    var theadRow = $('#theadRow');
+    var tbody = $('#tbody');
+    var pageIdx = $('#pageIdx');
+    var pageTotal = $('#pageTotal');
+    var countTotal = $('#countTotal');
+    var countFiltered = $('#countFiltered');
+    var colPicker = $('#colPicker');
+    var colSearchInput = $('#colSearchInput');
+    var colCategories = $('#colCategories');
+    var colStats = $('#colStats');
+
+    function setFileInfo(msg, cls){
+      if (!fileInfo) return;
+      fileInfo.textContent = msg;
+      fileInfo.className = 'status ' + (cls||'');
+    }
+
+    function parseCSVorTSV(text){
+      // 移除BOM标记
+      text = text.replace(/^\uFEFF/, '');
+      
+      if (!text.trim()) {
+        return { header: [], records: [] };
+      }
+      
+      var lines = text.split(/\r?\n/);
+      var first = '';
+      
+      // 找到第一行非空行来判断分隔符
+      for (var i=0;i<lines.length;i++){ 
+        if(lines[i].trim().length){ 
+          first = lines[i]; 
+          break; 
+        } 
+      }
+      
+      if (!first) {
+        return { header: [], records: [] };
+      }
+      
+      // 智能判断分隔符
+      var tabCount = (first.match(/\t/g)||[]).length;
+      var commaCount = (first.match(/,/g)||[]).length;
+      var sep = tabCount > commaCount ? '\t' : ',';
+      
+      function parseDSV(str, d){
+        var rows=[], row=[], field='', inQ=false;
+        for(var i=0;i<str.length;i++){
+          var c=str[i], n=str[i+1];
+          if(inQ){
+            if(c === '"' && n === '"'){ field+='"'; i++; continue; }
+            if(c === '"'){ inQ=false; continue; }
+            field += c;
+          }else{
+            if(c === '"'){ inQ=true; continue; }
+            if(c === d){ row.push(field); field=''; continue; }
+            if(c === '\n'){ row.push(field); rows.push(row); row=[]; field=''; continue; }
+            if(c === '\r'){ continue; }
+            field += c;
+          }
+        }
+        if (field || row.length) {
+          row.push(field); 
+          rows.push(row);
+        }
+        
+        // 过滤空行
+        var filtered = [];
+        for (var r=0;r<rows.length;r++){
+          var hasContent = false;
+          for (var j=0;j<rows[r].length;j++){ 
+            if(String(rows[r][j]||'').trim().length){ 
+              hasContent=true; 
+              break; 
+            } 
+          }
+          if (hasContent) filtered.push(rows[r]);
+        }
+        return filtered;
+      }
+      
+      var rows = parseDSV(text, sep);
+      if(!rows.length) return { header: [], records: [] };
+      
+      var header = rows[0].map(function(x){ return String(x||'').trim(); });
+      
+      // 验证表头
+      if (header.length === 0 || header.every(function(h){ return !h; })) {
+        return { header: [], records: [] };
+      }
+      
+      var recs = [];
+      for (var i=1;i<rows.length;i++){
+        var r = rows[i], obj = {};
+        for (var k=0;k<header.length;k++){ 
+          obj[header[k]] = String(r[k] == null ? '' : r[k]).trim(); 
+        }
+        recs.push(obj);
+      }
+      return { header: header, records: recs };
+    }
+
+    function categorizeColumns(columns) {
+      var categories = {
+        '基本信息': [],
+        '联系方式': [],
+        '地域信息': [],
+        '业务数据': [],
+        '状态信息': [],
+        '时间信息': [],
+        '其他': []
+      };
+      
+      var patterns = {
+        '基本信息': /(客户|公司|店铺|企业|名称|name|company|shop|store|负责人|联系人|姓名)/i,
+        '联系方式': /(电话|手机|邮箱|email|phone|tel|mobile|qq|微信|wechat)/i,
+        '地域信息': /(国家|省|市|地区|地址|country|province|city|address|区域)/i,
+        '业务数据': /(GMV|金额|成交|订单|销量|收入|revenue|sales|目标|业绩)/i,
+        '状态信息': /(状态|等级|星|分数|status|level|star|score|活跃|优先)/i,
+        '时间信息': /(时间|日期|time|date|创建|更新|最近|最后)/i
+      };
+      
+      for (var i = 0; i < columns.length; i++) {
+        var col = columns[i];
+        var categorized = false;
+        
+        for (var category in patterns) {
+          if (patterns[category].test(col)) {
+            categories[category].push(col);
+            categorized = true;
+            break;
+          }
+        }
+        
+        if (!categorized) {
+          categories['其他'].push(col);
+        }
+      }
+      
+      return categories;
+    }
+
+    function detectNameColumn(columns){
+      var patterns = /(客户|公司|店铺|企业|公司名|客户名|name|company|shop|store)/i;
+      for (var i=0;i<columns.length;i++){ if (patterns.test(columns[i])) return columns[i]; }
+      return columns[0] || '';
+    }
+
+    function buildColumnCategories(columns) {
+      var categories = categorizeColumns(columns);
+      colCategories.innerHTML = '';
+      
+      // 添加“全部”按钮
+      var allBtn = document.createElement('button');
+      allBtn.className = 'col-category-btn active';
+      allBtn.textContent = '全部 (' + columns.length + ')';
+      allBtn.addEventListener('click', function() {
+        state.colSearch = '';
+        colSearchInput.value = '';
+        updateCategoryButtons(allBtn);
+        buildColumnPicker(state.columns);
+      });
+      colCategories.appendChild(allBtn);
+      
+      // 添加分类按钮
+      for (var category in categories) {
+        if (categories[category].length > 0) {
+          (function(cat, cols) {
+            var btn = document.createElement('button');
+            btn.className = 'col-category-btn';
+            btn.textContent = cat + ' (' + cols.length + ')';
+            btn.addEventListener('click', function() {
+              state.colSearch = '';
+              colSearchInput.value = '';
+              updateCategoryButtons(btn);
+              buildColumnPicker(cols);
+            });
+            colCategories.appendChild(btn);
+          })(category, categories[category]);
+        }
+      }
+    }
+    
+    function updateCategoryButtons(activeBtn) {
+      var buttons = colCategories.querySelectorAll('.col-category-btn');
+      for (var i = 0; i < buttons.length; i++) {
+        buttons[i].classList.remove('active');
+      }
+      activeBtn.classList.add('active');
+    }
+
+    function buildNameColOptions(columns, guessed){
+      var html = '';
+      for (var i=0;i<columns.length;i++){
+        var c = columns[i];
+        html += '<option value="'+c.replace(/"/g,'&quot;')+'">'+c+'</option>';
+      }
+      nameColSel.innerHTML = html;
+      nameColSel.value = guessed || (columns[0] || '');
+      state.nameCol = nameColSel.value;
+    }
+
+    function buildColumnPicker(columns){
+      var filteredColumns = columns;
+      
+      // 应用搜索过滤
+      if (state.colSearch) {
+        filteredColumns = columns.filter(function(col) {
+          return col.toLowerCase().indexOf(state.colSearch.toLowerCase()) !== -1;
+        });
+      }
+      
+      colPicker.innerHTML = '';
+      
+      if (filteredColumns.length === 0) {
+        var noResult = document.createElement('div');
+        noResult.style.padding = '20px';
+        noResult.style.textAlign = 'center';
+        noResult.style.color = '#6b7280';
+        noResult.textContent = '没有找到匹配的列';
+        colPicker.appendChild(noResult);
+        return;
+      }
+      
+      for (var i=0;i<filteredColumns.length;i++){
+        var c = filteredColumns[i];
+        var chip = document.createElement('label');
+        chip.className = 'colchip';
+        
+        var cb = document.createElement('input'); 
+        cb.type='checkbox';
+        cb.checked = !!state.visibleCols[c];
+        
+        // 更新样式
+        if (cb.checked) {
+          chip.classList.add('checked');
+        }
+        
+        (function(col, box, chipEl){
+          box.addEventListener('change', function(){
+            state.visibleCols[col] = !!box.checked;
+            if (box.checked) {
+              chipEl.classList.add('checked');
+            } else {
+              chipEl.classList.remove('checked');
+            }
+            updateColStats();
+            render();
+          });
+          
+          // 点击整个chip也可以切换
+          chipEl.addEventListener('click', function(e) {
+            if (e.target !== box) {
+              box.checked = !box.checked;
+              box.dispatchEvent(new Event('change'));
+            }
+          });
+        })(c, cb, chip);
+        
+        var span = document.createElement('span'); 
+        span.className = 'col-name';
+        span.textContent = c;
+        
+        chip.appendChild(cb); 
+        chip.appendChild(span);
+        colPicker.appendChild(chip);
+      }
+      
+      updateColStats();
+    }
+
+    function updateColStats() {
+      var selectedCount = 0;
+      for (var i = 0; i < state.columns.length; i++) {
+        if (state.visibleCols[state.columns[i]]) {
+          selectedCount++;
+        }
+      }
+      colStats.textContent = '已选择 ' + selectedCount + ' / 共 ' + state.columns.length + ' 列';
+    }
+
+    function selectAllCols(flag){
+      for (var i=0;i<state.columns.length;i++){ 
+        state.visibleCols[state.columns[i]] = !!flag; 
+      }
+      buildColumnPicker(state.columns);
+      updateColStats();
+      render();
+    }
+
+    function defaultCols(){
+      var keep = /(客户|公司|国家|省|市|联系人|电话|手机|邮箱|email|GMV|星|等级|分数|行业|类目|状态|最近|更新时间|本月|累计|目标|成交|活跃)/i;
+      var hasSelected = false;
+      for (var i=0;i<state.columns.length;i++){
+        var c = state.columns[i];
+        if (keep.test(c)){ 
+          state.visibleCols[c] = true; 
+          hasSelected = true; 
+        } else { 
+          state.visibleCols[c] = false; 
+        }
+      }
+      if (!hasSelected){
+        for (var i=0;i<Math.min(10, state.columns.length); i++){ 
+          state.visibleCols[state.columns[i]] = true; 
+        }
+      }
+      buildColumnPicker(state.columns);
+      updateColStats();
+      render();
+    }
+
+    function applyFilters(records){
+      var out = records.slice(0);
+      var q = String(state.nameQ||'').trim().toLowerCase();
+      if (q && state.nameCol){
+        var parts = q.split(/\s+/).filter(function(x){ return x; });
+        out = out.filter(function(row){
+          var val = String(row[state.nameCol] || '').toLowerCase();
+          for (var i=0;i<parts.length;i++){ if (val.indexOf(parts[i]) === -1) return false; }
+          return true;
+        });
+      }
+      if (state.sort.key){
+        var k = state.sort.key, d = state.sort.dir;
+        out.sort(function(a,b){
+          var av = String(a[k] || '');
+          var bv = String(b[k] || '');
+          var na = parseFloat(av.replace(/[^0-9.\-]/g,''));
+          var nb = parseFloat(bv.replace(/[^0-9.\-]/g,''));
+          var an = !isNaN(na), bn = !isNaN(nb);
+          if (an && bn && (/^[-+]?[\d,.]+$/.test(av) || /^[-+]?[\d,.]+$/.test(bv))) return (na - nb) * d;
+          return av.localeCompare(bv, 'zh-Hans-CN') * d;
+        });
+      }
+      return out;
+    }
+
+    function renderTableHead(){
+      theadRow.innerHTML = '';
+      var cols = [];
+      for (var i=0;i<state.columns.length;i++){ var c=state.columns[i]; if (state.visibleCols[c]) cols.push(c); }
+      for (var i=0;i<cols.length;i++){
+        (function(col){
+          var th = document.createElement('th');
+          th.textContent = col + ' ' + (state.sort.key===col ? (state.sort.dir>0?'▲':'▼') : '↕');
+          th.addEventListener('click', function(){
+            if (state.sort.key===col){ state.sort.dir *= -1; } else { state.sort.key=col; state.sort.dir=1; }
+            render();
+          });
+          theadRow.appendChild(th);
+        })(cols[i]);
+      }
+    }
+
+    function render(){
+      try {
+        var data = applyFilters(state.raw);
+        countTotal.textContent = String(state.raw.length||0);
+        countFiltered.textContent = String(data.length||0);
+
+        var ps = state.pageSize;
+        var totalPages = Math.max(1, Math.ceil(data.length / ps));
+        if (state.page > totalPages) state.page = totalPages;
+        var start = (state.page - 1) * ps;
+        var pageData = data.slice(start, start + ps);
+        pageIdx.textContent = String(state.page);
+        pageTotal.textContent = String(totalPages);
+
+        renderTableHead();
+
+        var cols = [];
+        for (var i=0;i<state.columns.length;i++){ 
+          var c=state.columns[i]; 
+          if (state.visibleCols[c]) cols.push(c); 
+        }
+        
+        tbody.innerHTML = '';
+        
+        // 添加性能优化：大数据集时分批渲染
+        if (pageData.length > 100) {
+          renderTableRowsBatch(pageData, cols, 0);
+        } else {
+          renderTableRows(pageData, cols);
+        }
+      } catch(err) {
+        console.error('渲染错误:', err);
+        setFileInfo('渲染错误: ' + (err.message || err), 'err');
+      }
+    }
+    
+    function renderTableRows(pageData, cols) {
+      for (var r=0;r<pageData.length;r++){
+        (function(row){
+          var tr = document.createElement('tr');
+          tr.addEventListener('click', function(){ openDetail(row); });
+          for (var i=0;i<cols.length;i++){
+            var td = document.createElement('td');
+            var v = row[cols[i]];
+            td.textContent = (v==null ? '' : String(v));
+            tr.appendChild(td);
+          }
+          tbody.appendChild(tr);
+        })(pageData[r]);
+      }
+    }
+    
+    function renderTableRowsBatch(pageData, cols, startIndex) {
+      var batchSize = 50;
+      var endIndex = Math.min(startIndex + batchSize, pageData.length);
+      
+      for (var r=startIndex; r<endIndex; r++){
+        (function(row){
+          var tr = document.createElement('tr');
+          tr.addEventListener('click', function(){ openDetail(row); });
+          for (var i=0;i<cols.length;i++){
+            var td = document.createElement('td');
+            var v = row[cols[i]];
+            td.textContent = (v==null ? '' : String(v));
+            tr.appendChild(td);
+          }
+          tbody.appendChild(tr);
+        })(pageData[r]);
+      }
+      
+      if (endIndex < pageData.length) {
+        setTimeout(function() {
+          renderTableRowsBatch(pageData, cols, endIndex);
+        }, 10);
+      }
+    }
+
+    function setData(records){
+      // 输入验证
+      if (!records || !Array.isArray(records)) {
+        console.warn('setData: 无效的records参数');
+        records = [];
+      }
+      
+      state.raw = records;
+      state.columns = records.length > 0 ? Object.keys(records[0]) : [];
+      state.visibleCols = {};
+      
+      // 限制默认显示的列数，避免性能问题
+      var maxShow = Math.min(20, state.columns.length);
+      for (var i=0; i<maxShow; i++){ 
+        state.visibleCols[state.columns[i]] = true; 
+      }
+      var guessed = detectNameColumn(state.columns);
+      buildNameColOptions(state.columns, guessed);
+      buildColumnCategories(state.columns);
+      buildColumnPicker(state.columns);
+      state.page = 1;
+      render();
+    }
+
+    var detail = $('#detail');
+    var reportGrid = $('#reportGrid');
+    var reportTitle = $('#reportTitle');
+
+    function openDetail(row){
+      var title = '客户信息汇总';
+      if (state.nameCol && row[state.nameCol]) title = '客户：' + String(row[state.nameCol]);
+      reportTitle.textContent = title;
+      reportGrid.innerHTML = '';
+      var ordered = [];
+      for (var i=0;i<state.columns.length;i++){ var c=state.columns[i]; if (state.visibleCols[c]) ordered.push(c); }
+      for (var i=0;i<state.columns.length;i++){ var c=state.columns[i]; if (!state.visibleCols[c]) ordered.push(c); }
+      for (var i=0;i<ordered.length;i++){
+        var c = ordered[i];
+        var lab = document.createElement('label'); lab.textContent = c;
+        var val = document.createElement('div'); val.className = 'val'; val.textContent = String(row[c] == null ? '' : row[c]);
+        reportGrid.appendChild(lab); reportGrid.appendChild(val);
+      }
+      detail.classList.add('open'); detail.setAttribute('aria-hidden', 'false');
+      document.addEventListener('keydown', escOnce, { once:true });
+    }
+    function closeDetail(){
+      detail.classList.remove('open'); detail.setAttribute('aria-hidden','true');
+    }
+    function escOnce(e){ if (e.key === 'Escape') closeDetail(); }
+    $('#detail').addEventListener('click', function(e){ if (e.target === detail) closeDetail(); });
+    $('#btnClose').addEventListener('click', closeDetail);
+    $('#btnCopy').addEventListener('click', function(){
+      try {
+        var kids = Array.prototype.slice.call(reportGrid.children);
+        var parts = [reportTitle.textContent];
+        for (var i=0;i<kids.length;i+=2){
+          if (kids[i] && kids[i+1]) {
+            parts.push((kids[i].textContent||'') + ': ' + (kids[i+1].textContent||''));
+          }
+        }
+        var txt = parts.join('\n');
+        
+        if (navigator.clipboard && navigator.clipboard.writeText){
+          navigator.clipboard.writeText(txt).then(
+            function(){ alert('已复制汇总文本'); }, 
+            function(err){ 
+              console.error('复制失败:', err);
+              alert('复制失败，请手动复制'); 
+            }
+          );
+        } else {
+          // 降级方案：创建临时文本区域
+          var textArea = document.createElement('textarea');
+          textArea.value = txt;
+          textArea.style.position = 'fixed';
+          textArea.style.opacity = '0';
+          document.body.appendChild(textArea);
+          textArea.select();
+          try {
+            document.execCommand('copy');
+            alert('已复制汇总文本');
+          } catch(err) {
+            console.error('复制失败:', err);
+            alert('当前环境不支持直接复制，请手动选择文本');
+          }
+          document.body.removeChild(textArea);
+        }
+      } catch(err) {
+        console.error('复制功能错误:', err);
+        alert('复制失败: ' + (err.message || err));
+      }
+    });
+    (function(){
+      var script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+      script.async = true;
+      document.head.appendChild(script);
+    })();
+    $('#btnSavePng').addEventListener('click', function(){
+      try {
+        if (typeof html2canvas === 'undefined'){ 
+          alert('截图引擎未加载，请稍后再试'); 
+          return; 
+        }
+        
+        var node = document.getElementById('reportPanel');
+        if (!node) {
+          alert('找不到要截图的内容');
+          return;
+        }
+        
+        html2canvas(node, { 
+          backgroundColor:'#ffffff', 
+          scale:2,
+          useCORS: true,
+          allowTaint: true
+        }).then(function(canvas){
+          var a = document.createElement('a');
+          a.href = canvas.toDataURL('image/png');
+          a.download = (reportTitle.textContent || '客户信息汇总') + '.png';
+          a.click();
+        }).catch(function(err) {
+          console.error('截图失败:', err);
+          alert('截图失败: ' + (err.message || err));
+        });
+      } catch(err) {
+        console.error('截图功能错误:', err);
+        alert('截图失败: ' + (err.message || err));
+      }
+    });
+
+    // Import handlers - 文件导入功能已禁用
+    function openFileDialog(){
+      alert('文件导入功能已被禁用');
+      setFileInfo('文件导入功能已禁用', 'warn');
+    }
+    window.__openFileDialog = openFileDialog;
+    document.getElementById('btnImport').addEventListener('click', function(){ openFileDialog(); });
+
+    document.getElementById('dropZone').addEventListener('dragover', function(e){ e.preventDefault(); this.classList.add('over'); });
+    document.getElementById('dropZone').addEventListener('dragleave', function(){ this.classList.remove('over'); });
+    document.getElementById('dropZone').addEventListener('drop', function(e){
+      e.preventDefault(); this.classList.remove('over');
+      var files = e.dataTransfer && e.dataTransfer.files;
+      if(files && files[0]) handlePickedFile(files[0]);
+    });
+    document.getElementById('dropZone').addEventListener('click', function(){ openFileDialog(); });
+
+    document.getElementById('btnClear').addEventListener('click', function(){
+      if (state.raw.length > 0) {
+        var confirmed = confirm('确定要清空所有数据吗？此操作不可撤销。');
+        if (!confirmed) return;
+      }
+      
+      try {
+        state.raw = []; 
+        state.columns = []; 
+        state.visibleCols = {}; 
+        state.page = 1; 
+        state.sort = {key: '', dir: 1}; 
+        state.nameCol = ''; 
+        state.nameQ = '';
+        state.colSearch = '';
+        
+        theadRow.innerHTML = ''; 
+        tbody.innerHTML = ''; 
+        colPicker.innerHTML = ''; 
+        nameColSel.innerHTML = '';
+        if (colCategories) colCategories.innerHTML = '';
+        if (colStats) colStats.textContent = '已选择 0 列';
+        
+        setFileInfo('未加载数据','warn'); 
+        countTotal.textContent = '0'; 
+        countFiltered.textContent = '0'; 
+        nameQ.value = '';
+        
+        pageIdx.textContent = '1';
+        pageTotal.textContent = '1';
+      } catch(err) {
+        console.error('清空数据错误:', err);
+        alert('清空失败: ' + (err.message || err));
+      }
+    });
+
+    document.getElementById('btnExport').addEventListener('click', function(){
+      try {
+        var data = applyFilters(state.raw);
+        var cols = [];
+        for (var i=0;i<state.columns.length;i++){ 
+          var c=state.columns[i]; 
+          if (state.visibleCols[c]) cols.push(c); 
+        }
+        
+        if (cols.length === 0) {
+          alert('没有选择要导出的列');
+          return;
+        }
+        
+        if (data.length === 0) {
+          alert('没有数据可以导出');
+          return;
+        }
+        
+        var lines = [];
+        var h = [];
+        for (var i=0;i<cols.length;i++){ 
+          h.push('"' + String(cols[i]).replace(/"/g,'""') + '"'); 
+        }
+        lines.push(h.join(','));
+        
+        for (var r=0;r<data.length;r++){
+          var row = [];
+          for (var i=0;i<cols.length;i++){ 
+            row.push('"' + String(data[r][cols[i]] || '').replace(/"/g,'""') + '"'); 
+          }
+          lines.push(row.join(','));
+        }
+        
+        // 添加BOM以支持中文
+        var content = '\uFEFF' + lines.join('\n');
+        var blob = new Blob([content], {type:'text/csv;charset=utf-8'});
+        var a = document.createElement('a'); 
+        a.href = URL.createObjectURL(blob); 
+        
+        // 生成更有意义的文件名
+        var timestamp = new Date().toISOString().slice(0,19).replace(/:/g,'-');
+        a.download = 'filtered-results-' + timestamp + '.csv'; 
+        a.click(); 
+        URL.revokeObjectURL(a.href);
+        
+        setFileInfo('已导出 ' + data.length + ' 行数据', 'ok');
+      } catch(err) {
+        console.error('导出错误:', err);
+        alert('导出失败: ' + (err.message || err));
+      }
+    });
+
+    document.getElementById('pageSize').addEventListener('change', function(e){ state.pageSize = parseInt(e.target.value,10)||50; state.page=1; render(); });
+    document.getElementById('prev').addEventListener('click', function(){ if(state.page>1){ state.page--; render(); } });
+    document.getElementById('next').addEventListener('click', function(){ state.page++; render(); });
+
+    nameColSel.addEventListener('change', function(){ state.nameCol = nameColSel.value; state.page=1; render(); });
+    nameQ.addEventListener('input', function(e){ state.nameQ = e.target.value || ''; state.page=1; render(); });
+
+    // 列搜索和收起展开功能
+    colSearchInput.addEventListener('input', function(e) {
+      state.colSearch = e.target.value || '';
+      buildColumnPicker(state.columns);
+    });
+    
+    document.getElementById('btnToggleCollapse').addEventListener('click', function() {
+      state.collapseColumns = !state.collapseColumns;
+      var picker = document.getElementById('colPicker');
+      var searchBox = document.querySelector('.col-search-box');
+      
+      if (state.collapseColumns) {
+        picker.style.display = 'none';
+        searchBox.style.display = 'none';
+        this.textContent = '展开';
+      } else {
+        picker.style.display = 'grid';
+        searchBox.style.display = 'block';
+        this.textContent = '收起';
+      }
+    });
+
+    document.getElementById('btnSelectAll').addEventListener('click', function(){ selectAllCols(true); });
+    document.getElementById('btnInvert').addEventListener('click', function(){
+      var newSet = {};
+      for (var i=0;i<state.columns.length;i++){ 
+        var c = state.columns[i]; 
+        if (!state.visibleCols[c]) newSet[c] = true; 
+      }
+      state.visibleCols = newSet;
+      buildColumnPicker(state.columns);
+      updateColStats();
+      render();
+    });
+    document.getElementById('btnDefaultCols').addEventListener('click', defaultCols);
+
+    // File reading
+    function handlePickedFile(file){
+      // 输入验证
+      if (!file) {
+        setFileInfo('未选择文件', 'err');
+        return;
+      }
+      
+      // version token to avoid race conditions across multiple imports
+      var token = ++state.loadToken;
+      
+      // Clear previous file & data immediately when importing a new file
+      state.raw = [];
+      state.columns = [];
+      state.visibleCols = {};
+      state.page = 1;
+      state.sort = { key: '', dir: 1 };
+      state.nameCol = '';
+      state.nameQ = '';
+      
+      // 安全地清空UI元素
+      if (nameQ) nameQ.value = '';
+      if (colSearchInput) colSearchInput.value = '';
+      theadRow.innerHTML = '';
+      tbody.innerHTML = '';
+      colPicker.innerHTML = '';
+      nameColSel.innerHTML = '';
+      pageIdx.textContent = '1';
+      pageTotal.textContent = '1';
+      countTotal.textContent = '0';
+      countFiltered.textContent = '0';
+
+      try{
+        var name = file && file.name ? file.name : '未知文件名';
+        var type = file && file.type ? file.type : '';
+        var nameLower = name.toLowerCase();
+        var typeLower = type.toLowerCase();
+        setFileInfo('处理中…（' + name + ' / ' + (type || '未知类型') + '）','warn');
+        // Prefer XLSX
+        var looksExcel = /\.(xlsx|xls)$/i.test(nameLower) || /sheet|excel/.test(typeLower) || (typeLower.indexOf('application/') === 0) || typeLower === '';
+        var looksText  = /\.(csv|tsv|txt)$/i.test(nameLower) || (typeLower.indexOf('text/') === 0);
+
+        function tryReadXLSX(next){
+          if (typeof XLSX === 'undefined'){ 
+            if(next) next('XLSX 未加载'); 
+            return; 
+          }
+          
+          var fr = new FileReader();
+          fr.onload = function(e){
+            try{
+              if (!e.target.result) {
+                if(next) next('文件内容为空');
+                return;
+              }
+              
+              var data = new Uint8Array(e.target.result);
+              var wb = XLSX.read(data, { type:'array' });
+              var sheets = wb.SheetNames || [];
+              
+              if (sheets.length === 0) {
+                if(next) next('Excel文件无工作表');
+                return;
+              }
+              
+              var records = [];
+              for (var i=0;i<sheets.length;i++){
+                var ws = wb.Sheets[sheets[i]];
+                if (!ws) continue;
+                
+                var arr = XLSX.utils.sheet_to_json(ws, { defval:'', raw:false });
+                if (arr && arr.length) {
+                  for (var j=0;j<arr.length;j++) {
+                    records.push(arr[j]);
+                  }
+                }
+              }
+              
+              if (records.length > 0){ 
+                if (token !== state.loadToken) return; 
+                setData(records); 
+                setFileInfo('已加载：' + name + '（' + records.length + ' 行）','ok'); 
+                // 清空文件选择器
+                var fp = document.getElementById('filePick'); 
+                if(fp) fp.value = ''; 
+              } else {
+                if (next) next('XLSX 无有效数据');
+              }
+            }catch(err){ 
+              var errMsg = err && err.message ? err.message : String(err);
+              console.error('XLSX解析错误:', errMsg);
+              if(next) next(errMsg); 
+            }
+          };
+          
+          fr.onerror = function(e){ 
+            console.error('文件读取错误:', e);
+            if(next) next('文件读取失败'); 
+          };
+          
+          fr.readAsArrayBuffer(file);
+        }
+
+        function tryReadDSV(next){
+          var fr = new FileReader();
+          fr.onload = function(e){
+            try{
+              var txt = String(e.target.result || '');
+              
+              if (!txt.trim()) {
+                if(next) next('文件内容为空');
+                return;
+              }
+              
+              var parsed = parseCSVorTSV(txt);
+              if (parsed && parsed.records && parsed.records.length > 0){
+                if (token !== state.loadToken) return;
+                setData(parsed.records);
+                setFileInfo('已加载：' + name + '（' + parsed.records.length + ' 行）','ok');
+              } else {
+                if(next) next('文本无有效数据');
+              }
+            }catch(err){ 
+              var errMsg = err && err.message ? err.message : String(err);
+              console.error('CSV/TSV解析错误:', errMsg);
+              if(next) next(errMsg); 
+            }
+          };
+          
+          fr.onerror = function(e){ 
+            console.error('文件读取错误:', e);
+            if(next) next('文件读取失败'); 
+          };
+          
+          fr.readAsText(file, 'UTF-8');
+        }
+
+        if (looksExcel){
+          tryReadXLSX(function(err1){
+            tryReadDSV(function(err2){
+              if (token === state.loadToken){ setFileInfo('导入失败：无法解析为 Excel 或 文本（' + err1 + ' / ' + err2 + '）','err');
+              alert('导入失败：无法解析为 Excel 或 文本（' + err1 + ' / ' + err2 + '）'); }
+            });
+          });
+        } else if (looksText){
+          tryReadDSV(function(err1){
+            tryReadXLSX(function(err2){
+              if (token === state.loadToken){ setFileInfo('导入失败：无法解析为 文本 或 Excel（' + err1 + ' / ' + err2 + '）','err');
+              alert('导入失败：无法解析为 文本 或 Excel（' + err1 + ' / ' + err2 + '）'); }
+            });
+          });
+        } else {
+          tryReadXLSX(function(err1){
+            tryReadDSV(function(err2){
+              if (token === state.loadToken){ setFileInfo('导入失败：不支持的文件类型（' + name + ' / ' + (type||'未知') + '）；解析失败：' + err1 + ' / ' + err2,'err');
+              alert('导入失败：不支持的文件类型（' + name + ' / ' + (type||'未知') + '）；解析失败：' + err1 + ' / ' + err2); }
+            });
+          });
+        }
+      }catch(err){
+        var errMsg = err && err.message ? err.message : String(err);
+        console.error('文件处理异常:', errMsg);
+        if (token === state.loadToken){ 
+          setFileInfo('导入失败：' + errMsg,'err');
+          alert('导入失败：' + errMsg); 
+        }
+      }
+    }
+
+  })();
+  </script>
+</body>
+</html>

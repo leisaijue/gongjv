@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>工具中心 - 登录</title>
+  <style>
+    :root { 
+      --panel: #ffffff; 
+      --border: #e5e7eb; 
+      --text: #111827; 
+      --muted: #6b7280; 
+      --accent: #1b65ff;
+      --error: #ef4444;
+      --success: #10b981;
+    }
+    
+    body { 
+      margin: 0; 
+      font: 14px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, 'PingFang SC','Hiragino Sans GB','Microsoft YaHei', sans-serif; 
+      color: var(--text); 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .login-container {
+      background: var(--panel);
+      border-radius: 20px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+      padding: 3rem 2.5rem;
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+    }
+    
+    .logo {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+    
+    .title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 0.5rem;
+    }
+    
+    .subtitle {
+      color: var(--muted);
+      margin-bottom: 2rem;
+      font-size: 0.9rem;
+    }
+    
+    .form-group {
+      margin-bottom: 1.5rem;
+      text-align: left;
+    }
+    
+    .form-label {
+      display: block;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 0.5rem;
+      font-size: 0.9rem;
+    }
+    
+    .form-input {
+      width: 100%;
+      padding: 1rem;
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      font-size: 1rem;
+      transition: all 0.3s ease;
+      box-sizing: border-box;
+    }
+    
+    .form-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(27, 101, 255, 0.1);
+    }
+    
+    .form-input.error {
+      border-color: var(--error);
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+    }
+    
+    .login-btn {
+      width: 100%;
+      padding: 1rem;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin-bottom: 1rem;
+    }
+    
+    .login-btn:hover {
+      background: #1854d1;
+      transform: translateY(-1px);
+    }
+    
+    .login-btn:active {
+      transform: translateY(0);
+    }
+    
+    .login-btn:disabled {
+      background: var(--muted);
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .error-message {
+      color: var(--error);
+      font-size: 0.875rem;
+      margin-top: 0.5rem;
+      display: none;
+    }
+    
+    .error-message.show {
+      display: block;
+    }
+    
+    .remember-me {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+      font-size: 0.9rem;
+    }
+    
+    .remember-me input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent);
+    }
+    
+    .security-note {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-top: 1.5rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    
+    .loading {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #ffffff;
+      border-radius: 50%;
+      border-top-color: transparent;
+      animation: spin 1s ease-in-out infinite;
+      margin-right: 0.5rem;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    /* 响应式设计 */
+    @media (max-width: 480px) {
+      .login-container {
+        margin: 1rem;
+        padding: 2rem 1.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <div class="logo">🔒</div>
+    <h1 class="title">工具中心</h1>
+    <p class="subtitle">请输入密码访问系统</p>
+    
+    <form id="loginForm">
+      <div class="form-group">
+        <label for="password" class="form-label">访问密码</label>
+        <input 
+          type="password" 
+          id="password" 
+          class="form-input" 
+          placeholder="请输入访问密码"
+          autocomplete="current-password"
+          required
+        />
+        <div id="errorMessage" class="error-message">密码错误，请重试</div>
+      </div>
+      
+      <div class="remember-me">
+        <input type="checkbox" id="rememberMe" />
+        <label for="rememberMe">记住密码（7天有效）</label>
+      </div>
+      
+      <button type="submit" class="login-btn" id="loginBtn">
+        登录访问
+      </button>
+    </form>
+    
+    <div class="security-note">
+      <strong>🛡️ 安全提示</strong><br>
+      此密码保护仅用于基础访问控制，所有工具均在本地运行，不会上传您的数据到服务器。
+    </div>
+  </div>
+
+  <script>
+    // 密码配置 - 您可以在这里修改密码
+    const CORRECT_PASSWORD = 'toolcenter2025';  // 请修改为您想要的密码
+    const SESSION_KEY = 'toolcenter_auth';
+    const REMEMBER_KEY = 'toolcenter_remember';
+    
+    // DOM 元素
+    const loginForm = document.getElementById('loginForm');
+    const passwordInput = document.getElementById('password');
+    const loginBtn = document.getElementById('loginBtn');
+    const errorMessage = document.getElementById('errorMessage');
+    const rememberCheckbox = document.getElementById('rememberMe');
+    
+    // 检查是否已经登录
+    function checkExistingAuth() {
+      const sessionAuth = sessionStorage.getItem(SESSION_KEY);
+      const rememberAuth = localStorage.getItem(REMEMBER_KEY);
+      
+      if (sessionAuth === 'authenticated') {
+        redirectToMainPage();
+        return true;
+      }
+      
+      if (rememberAuth) {
+        try {
+          const authData = JSON.parse(rememberAuth);
+          const expiryTime = new Date(authData.expiry);
+          const now = new Date();
+          
+          if (now < expiryTime) {
+            sessionStorage.setItem(SESSION_KEY, 'authenticated');
+            redirectToMainPage();
+            return true;
+          } else {
+            // 过期了，清除记住的认证
+            localStorage.removeItem(REMEMBER_KEY);
+          }
+        } catch (e) {
+          localStorage.removeItem(REMEMBER_KEY);
+        }
+      }
+      
+      return false;
+    }
+    
+    // 重定向到主页面
+    function redirectToMainPage() {
+      window.location.href = './index.html';
+    }
+    
+    // 显示错误信息
+    function showError(message) {
+      errorMessage.textContent = message;
+      errorMessage.classList.add('show');
+      passwordInput.classList.add('error');
+      
+      setTimeout(() => {
+        errorMessage.classList.remove('show');
+        passwordInput.classList.remove('error');
+      }, 3000);
+    }
+    
+    // 设置加载状态
+    function setLoading(loading) {
+      if (loading) {
+        loginBtn.disabled = true;
+        loginBtn.innerHTML = '<span class="loading"></span>验证中...';
+      } else {
+        loginBtn.disabled = false;
+        loginBtn.innerHTML = '登录访问';
+      }
+    }
+    
+    // 处理登录
+    function handleLogin(event) {
+      event.preventDefault();
+      
+      const password = passwordInput.value.trim();
+      
+      if (!password) {
+        showError('请输入密码');
+        return;
+      }
+      
+      setLoading(true);
+      
+      // 模拟网络延迟
+      setTimeout(() => {
+        if (password === CORRECT_PASSWORD) {
+          // 设置会话认证
+          sessionStorage.setItem(SESSION_KEY, 'authenticated');
+          
+          // 如果选择了记住密码，设置本地存储
+          if (rememberCheckbox.checked) {
+            const expiryDate = new Date();
+            expiryDate.setDate(expiryDate.getDate() + 7); // 7天后过期
+            
+            const authData = {
+              authenticated: true,
+              expiry: expiryDate.toISOString()
+            };
+            
+            localStorage.setItem(REMEMBER_KEY, JSON.stringify(authData));
+          }
+          
+          // 重定向到主页面
+          redirectToMainPage();
+        } else {
+          setLoading(false);
+          showError('密码错误，请重试');
+          passwordInput.value = '';
+          passwordInput.focus();
+        }
+      }, 800);
+    }
+    
+    // 处理输入框回车
+    function handleKeyPress(event) {
+      if (event.key === 'Enter') {
+        handleLogin(event);
+      }
+    }
+    
+    // 清除错误状态
+    function clearError() {
+      errorMessage.classList.remove('show');
+      passwordInput.classList.remove('error');
+    }
+    
+    // 页面加载完成后的初始化
+    document.addEventListener('DOMContentLoaded', function() {
+      // 检查是否已经认证
+      if (checkExistingAuth()) {
+        return;
+      }
+      
+      // 绑定事件
+      loginForm.addEventListener('submit', handleLogin);
+      passwordInput.addEventListener('keypress', handleKeyPress);
+      passwordInput.addEventListener('input', clearError);
+      
+      // 聚焦密码输入框
+      passwordInput.focus();
+      
+      console.log('登录页面加载完成');
+    });
+    
+    // 防止通过历史记录绕过登录
+    window.addEventListener('pageshow', function(event) {
+      if (event.persisted) {
+        checkExistingAuth();
+      }
+    });
+  </script>
+
+</body>
+</html>
