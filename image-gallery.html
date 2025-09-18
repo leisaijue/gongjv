@@ -161,6 +161,7 @@
           <textarea id="urlInput" placeholder="粘贴图片直链（每行一个），或点击“导入文件”。支持 //、http(s)://、裸域名（自动补 https://）。"></textarea>
           <button class="btn primary" id="btnAdd">添加到画廊</button>
           <button class="btn" id="btnImport">导入文件(TXT/CSV/TSV/XLSX)</button>
+          <button class="btn" id="btnDownloadTemplate">📋 下载模板</button>
           <button class="btn" id="btnExport">导出所有图片链接</button>
           <button class="btn" id="btnSample">插入示例</button>
           <button class="btn destructive" id="btnClear">清空画廊</button>
@@ -192,7 +193,13 @@
         <div class="card" style="flex:1 1 320px;">
           <div class="row">
             <label for="q">搜索标题</label>
-            <input type="text" id="q" placeholder="输入关键词" style="min-width:260px" />
+            <input type="text" id="q" placeholder="输入关键词搜索标题..." style="min-width:260px" />
+          </div>
+          <div class="filter-group">
+            <label>客户名字</label>
+            <select id="selCustomer"><option value="">全部</option></select>
+            <label>店铺ID</label>
+            <select id="selShop"><option value="">全部</option></select>
             <label>一级行业</label>
             <select id="sel1"><option value="">全部</option></select>
             <label>二级行业</label>
@@ -229,6 +236,8 @@
           <label>二级行业</label><div id="lbC2">-</div>
           <label>三级行业</label><div id="lbC3">-</div>
           <label>累计定招品数</label><div id="lbCnt">-</div>
+          <label>客户名字</label><div id="lbCust">-</div>
+          <label>店铺ID</label><div id="lbShop">-</div>
           <label>图片链接</label><div><a id="lbHref" href="#" target="_blank" rel="noreferrer noopener">在新标签打开</a></div>
         </div>
         <div class="toolbar">
@@ -270,11 +279,11 @@
       const safeStorage = { get(k){try{return localStorage.getItem(k)}catch(e){return null}}, set(k,v){try{localStorage.setItem(k,v)}catch(e){}} };
 
       const state = {
-        items: /** @type {Array<{img:string, topic_id?:string, 标题?:string, 一级行业?:string, 二级行业?:string, 三级行业?:string, 累计定招品数?:string}>} */([]),
-        fit: safeStorage.get('fit') || 'contain', size: +(safeStorage.get('size') || 240), gap: +(safeStorage.get('gap') || 12), radius: +(safeStorage.get('radius') || 12),
-        noNetwork: safeStorage.get('noNetwork') === '1', dragMode: false,
-        q: '', sel1: '', sel2: '', sel3: '',
-      };
+          items: /** @type {Array<{img:string, topic_id?:string, 标题?:string, 一级行业?:string, 二级行业?:string, 三级行业?:string, 累计定招品数?:string, 客户名字?:string, 店铺ID?:string}>} */([]),
+          fit: safeStorage.get('fit') || 'contain', size: +(safeStorage.get('size') || 240), gap: +(safeStorage.get('gap') || 12), radius: +(safeStorage.get('radius') || 12),
+          noNetwork: safeStorage.get('noNetwork') === '1', dragMode: false,
+          q: '', sel1: '', sel2: '', sel3: '', selCustomer: '', selShop: '',
+        };
 
       let lastRendered = [];
 
@@ -342,7 +351,9 @@
         '一级行业':['一级行业','一级类目','一级','行业1','cat1','category1','一级分类'],
         '二级行业':['二级行业','二级类目','二级','行业2','cat2','category2','二级分类'],
         '三级行业':['三级行业','三级类目','三级','行业3','cat3','category3','三级分类'],
-        '累计定招品数':['累计定招品数','累计定招品','定招品数','总定招品数','总数','count','数量','件数','累计数']
+        '累计定招品数':['累计定招品数','累计定招品','定招品数','总定招品数','总数','count','数量','件数','累计数'],
+        '客户名字':['客户名字','客户名称','客户','客户公司','公司名称','company','client','customer','客户名'],
+        '店铺ID':['店铺ID','店铺id','店铺编号','店铺号','shop_id','shopid','shop id','store_id','storeid','store id','门店ID','门店编号']
       };
       const REQUIRED = ['示例图片第一个'];
       const hnorm = s => String(s||'').toLowerCase().replace(/\s+/g,'').replace(/[_\-–—]/g,'').replace(/[（）()\[\]【】、，,。.;；:：'"\u201c\u201d\u2018\u2019]/g,'');
@@ -359,7 +370,9 @@
             一级行业: idxMap['一级行业']>=0?cols[idxMap['一级行业']]:'' ,
             二级行业: idxMap['二级行业']>=0?cols[idxMap['二级行业']]:'' ,
             三级行业: idxMap['三级行业']>=0?cols[idxMap['三级行业']]:'' ,
-            累计定招品数: idxMap['累计定招品数']>=0?cols[idxMap['累计定招品数']]:''
+            累计定招品数: idxMap['累计定招品数']>=0?cols[idxMap['累计定招品数']]:'' ,
+            客户名字: idxMap['客户名字']>=0?cols[idxMap['客户名字']]:'' ,
+            店铺ID: idxMap['店铺ID']>=0?cols[idxMap['店铺ID']]:''
           };
           if(rec.img) out.push(rec);
         }
@@ -404,21 +417,46 @@
       // 统计排序：用于一级行业按数量降序
       function sortByFreq(values){
         const freq = new Map();
-        for(const v of values){ const key=(v||'').trim(); if(!key) continue; freq.set(key, (freq.get(key)||0)+1); }
+        for(const v of values){ 
+          const key=(v||'').trim(); 
+          if(!key) continue; 
+          freq.set(key, (freq.get(key)||0)+1); 
+        }
         return Array.from(freq.entries()).sort((a,b)=> b[1]-a[1] ).map(([k])=>k);
       }
-      function uniqAlpha(list){ return Array.from(new Set(list.filter(Boolean).map(s=>String(s).trim()))).sort((a,b)=>a.localeCompare(b,'zh-Hans-CN')); }
+      
+      // 去重并按字母排序：过滤空值和空字符串
+      function uniqAlpha(list){ 
+        return Array.from(new Set(
+          list.filter(x => x && String(x).trim())
+              .map(s => String(s).trim())
+        )).sort((a,b) => a.localeCompare(b,'zh-Hans-CN')); 
+      }
 
       function refreshFilterOptionsCascading(){
-        const sel1=$('#sel1'), sel2=$('#sel2'), sel3=$('#sel3'); if(!sel1||!sel2||!sel3) return;
-        const s1=state.sel1||'', s2=state.sel2||'', s3=state.sel3||''; const all=state.items;
+        const sel1=$('#sel1'), sel2=$('#sel2'), sel3=$('#sel3'), selCustomer=$('#selCustomer'), selShop=$('#selShop'); 
+        if(!sel1||!sel2||!sel3||!selCustomer||!selShop) return;
+        const s1=state.sel1||'', s2=state.sel2||'', s3=state.sel3||'', sCust=state.selCustomer||'', sShop=state.selShop||''; 
+        const all=state.items;
 
-        // 一级行业：按频次降序
-        const opts1 = sortByFreq(all.map(x=>x.一级行业));
+        // 客户名字：按字典序
+        const optsCust = uniqAlpha(all.map(x=>x.客户名字));
+        
+        // 店铺ID：跟随客户名字筛选后，使用字典序
+        const itemsShop = sCust ? all.filter(x=>x.客户名字===sCust) : all; 
+        const optsShop = uniqAlpha(itemsShop.map(x=>x.店铺ID));
+        
+        // 一级行业：跟随店铺ID筛选后，按频次降序
+        const items1 = sShop ? itemsShop.filter(x=>x.店铺ID===sShop) : itemsShop;
+        const opts1 = sortByFreq(items1.map(x=>x.一级行业));
+        
         // 二级：跟随一级筛选后，使用字典序
-        const items2 = s1 ? all.filter(x=>x.一级行业===s1) : all; const opts2 = uniqAlpha(items2.map(x=>x.二级行业));
+        const items2 = s1 ? items1.filter(x=>x.一级行业===s1) : items1; 
+        const opts2 = uniqAlpha(items2.map(x=>x.二级行业));
+        
         // 三级：跟随二级筛选后，使用字典序
-        const items3 = s2 ? items2.filter(x=>x.二级行业===s2) : items2; const opts3 = uniqAlpha(items3.map(x=>x.三级行业));
+        const items3 = s2 ? items2.filter(x=>x.二级行业===s2) : items2; 
+        const opts3 = uniqAlpha(items3.map(x=>x.三级行业));
 
         function fill(sel, opts, cur){
           sel.innerHTML='';
@@ -428,22 +466,48 @@
           sel.value = opts.includes(cur) ? cur : '';
         }
 
-        fill(sel1, opts1, s1);
-        const newS1Valid = opts1.includes(s1); let ns2=s2, ns3=s3; if(!newS1Valid){ ns2=''; ns3=''; }
+        fill(selCustomer, optsCust, sCust);
+        const newCustValid = optsCust.includes(sCust); let nsShop=sShop, ns1=s1, ns2=s2, ns3=s3; 
+        if(!newCustValid){ nsShop=''; ns1=''; ns2=''; ns3=''; }
+        
+        fill(selShop, optsShop, nsShop);
+        const newShopValid = optsShop.includes(nsShop); 
+        if(!newShopValid){ ns1=''; ns2=''; ns3=''; }
+        
+        fill(sel1, opts1, ns1);
+        const newS1Valid = opts1.includes(ns1); 
+        if(!newS1Valid){ ns2=''; ns3=''; }
+        
         fill(sel2, opts2, ns2);
-        const newS2Valid = opts2.includes(ns2); if(!newS2Valid){ ns3=''; }
+        const newS2Valid = opts2.includes(ns2); 
+        if(!newS2Valid){ ns3=''; }
+        
         fill(sel3, opts3, ns3);
-        state.sel1 = sel1.value; state.sel2 = sel2.value; state.sel3 = sel3.value;
+        
+        // 更新状态为实际有效的值
+        state.selCustomer = newCustValid ? sCust : '';
+        state.selShop = newShopValid ? nsShop : '';
+        state.sel1 = newS1Valid ? ns1 : '';
+        state.sel2 = newS2Valid ? ns2 : '';
+        state.sel3 = ns3;
       }
 
       function applyFilters(list){
-        const q=(state.q||'').toLowerCase(); const f1=state.sel1||''; const f2=state.sel2||''; const f3=state.sel3||'';
+        const q=(state.q||'').toLowerCase(); 
+        const f1=state.sel1||''; 
+        const f2=state.sel2||''; 
+        const f3=state.sel3||''; 
+        const fCust=state.selCustomer||''; 
+        const fShop=state.selShop||'';
+        
         return list.filter(x=>{
           const byTitle = q ? String(x.标题||'').toLowerCase().includes(q) : true;
-          const by1 = f1? x.一级行业===f1 : true;
-          const by2 = f2? x.二级行业===f2 : true;
-          const by3 = f3? x.三级行业===f3 : true;
-          return byTitle && by1 && by2 && by3;
+          const by1 = f1? (x.一级行业||'')===f1 : true;
+          const by2 = f2? (x.二级行业||'')===f2 : true;
+          const by3 = f3? (x.三级行业||'')===f3 : true;
+          const byCust = fCust? (x.客户名字||'')===fCust : true;
+          const byShop = fShop? (x.店铺ID||'')===fShop : true;
+          return byTitle && by1 && by2 && by3 && byCust && byShop;
         });
       }
 
@@ -477,8 +541,8 @@
       }
 
       // Lightbox
-      const lb = $('#lightbox'); const lbImg=$('#lbImg'); const lbTitle=$('#lbTitle'); const lbTopic=$('#lbTopic'); const lbC1=$('#lbC1'); const lbC2=$('#lbC2'); const lbC3=$('#lbC3'); const lbCnt=$('#lbCnt'); const lbHref=$('#lbHref');
-      function openLightbox(rec){ if(!lb) return; lb.classList.add('open'); lb.setAttribute('aria-hidden','false'); if(lbImg){ lbImg.src=rec.img; lbImg.alt=rec.标题||'preview'; } if(lbTitle) lbTitle.textContent=rec.标题||'(无标题)'; if(lbTopic) lbTopic.textContent=rec.topic_id||'-'; if(lbC1) lbC1.textContent=rec.一级行业||'-'; if(lbC2) lbC2.textContent=rec.二级行业||'-'; if(lbC3) lbC3.textContent=rec.三级行业||'-'; if(lbCnt) lbCnt.textContent=rec.累计定招品数||'-'; if(lbHref){ lbHref.href=rec.img; lbHref.onclick=(e)=>{ e.stopPropagation(); }; }
+      const lb = $('#lightbox'); const lbImg=$('#lbImg'); const lbTitle=$('#lbTitle'); const lbTopic=$('#lbTopic'); const lbC1=$('#lbC1'); const lbC2=$('#lbC2'); const lbC3=$('#lbC3'); const lbCnt=$('#lbCnt'); const lbCust=$('#lbCust'); const lbShop=$('#lbShop'); const lbHref=$('#lbHref');
+      function openLightbox(rec){ if(!lb) return; lb.classList.add('open'); lb.setAttribute('aria-hidden','false'); if(lbImg){ lbImg.src=rec.img; lbImg.alt=rec.标题||'preview'; } if(lbTitle) lbTitle.textContent=rec.标题||'(无标题)'; if(lbTopic) lbTopic.textContent=rec.topic_id||'-'; if(lbC1) lbC1.textContent=rec.一级行业||'-'; if(lbC2) lbC2.textContent=rec.二级行业||'-'; if(lbC3) lbC3.textContent=rec.三级行业||'-'; if(lbCnt) lbCnt.textContent=rec.累计定招品数||'-'; if(lbCust) lbCust.textContent=rec.客户名字||'-'; if(lbShop) lbShop.textContent=rec.店铺ID||'-'; if(lbHref){ lbHref.href=rec.img; lbHref.onclick=(e)=>{ e.stopPropagation(); }; }
         document.addEventListener('keydown', onEsc, { once: true }); }
       function closeLightbox(){ if(!lb) return; lb.classList.remove('open'); lb.setAttribute('aria-hidden','true'); if(lbImg) lbImg.removeAttribute('src'); }
       function onEsc(e){ if(e.key==='Escape') closeLightbox(); }
@@ -586,6 +650,31 @@ ${ta.value||''}`.trim();
       $('#btnClearAll')?.addEventListener('click',()=>{ if(confirm('清空输入与画廊？')){ state.items=[]; const ta=$('#urlInput'); if(ta) ta.value=''; refreshFilterOptionsCascading(); render(); } });
 
       $('#btnImport')?.addEventListener('click', async ()=>{ await openFileDialog(); });
+      $('#btnDownloadTemplate')?.addEventListener('click',()=>{
+        // 创建数据模板CSV内容 - 按新顺序排列
+        const templateHeaders = ['topic_id', '客户名字', '店铺ID', '标题', '示例图片第一个', '一级行业', '二级行业', '三级行业', '累计定招品数'];
+        const templateData = [
+          ['001', '客户A', 'SHOP001', '示例产品1', 'https://example.com/image1.jpg', '电子产品', '手机', '智能手机', '100'],
+          ['002', '客户B', 'SHOP002', '示例产品2', 'https://example.com/image2.jpg', '服装', '男装', '衬衫', '50'],
+          ['003', '客户A', 'SHOP003', '示例产品3', 'https://example.com/image3.jpg', '家居', '厨具', '锅具', '75'],
+          ['004', '客户C', 'SHOP004', '示例产品4', 'https://example.com/image4.jpg', '电子产品', '电脑', '笔记本电脑', '80'],
+          ['005', '客户B', 'SHOP005', '示例产品5', 'https://example.com/image5.jpg', '家居', '家具', '沙发', '30']
+        ];
+        
+        // 生成CSV内容
+        const csvContent = [templateHeaders, ...templateData]
+          .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+          .join('\n');
+        
+        // 添加BOM以支持中文
+        const bom = '\uFEFF';
+        const blob = new Blob([bom + csvContent], {type: 'text/csv;charset=utf-8'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = '数据导入模板.csv';
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
       $('#btnExport')?.addEventListener('click',()=>{
         const links=state.items.map(x=>x.img).filter(Boolean);
         const blob=new Blob([links.join('\n')],{type:'text/plain;charset=utf-8'});
@@ -602,6 +691,8 @@ ${ta.value||''}`.trim();
       $('#sel1')?.addEventListener('change',(e)=>{ state.sel1=e.target.value||''; refreshFilterOptionsCascading(); render(); });
       $('#sel2')?.addEventListener('change',(e)=>{ state.sel2=e.target.value||''; refreshFilterOptionsCascading(); render(); });
       $('#sel3')?.addEventListener('change',(e)=>{ state.sel3=e.target.value||''; render(); });
+      $('#selCustomer')?.addEventListener('change',(e)=>{ state.selCustomer=e.target.value||''; render(); });
+      $('#selShop')?.addEventListener('change',(e)=>{ state.selShop=e.target.value||''; render(); });
       $('#q')?.addEventListener('input',(e)=>{ state.q=e.target.value||''; render(); });
 
       try{ applyVars(); refreshFilterOptionsCascading(); render(); markHealth(true, '运行正常'); } catch(err){ markHealth(false, '初始化失败'); alert('初始化失败：'+(err.message||err)); }
