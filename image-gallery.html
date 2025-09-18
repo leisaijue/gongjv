@@ -59,6 +59,19 @@
     input[type="text"], textarea, select { color: #333333; background: #ffffff; border: 1px solid #dddddd; border-radius: 10px; padding: 8px 10px; outline: none; min-width: 220px; }
     textarea { width: min(100%, 920px); height: 90px; resize: vertical; }
     input[type="range"] { width: 180px; }
+    
+    /* 搜索下拉框样式 */
+    .searchable-select { position: relative; display: inline-block; min-width: 220px; }
+    .searchable-select input { width: 100%; box-sizing: border-box; padding-right: 30px; }
+    .searchable-select .clear-btn { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #999; cursor: pointer; font-size: 16px; padding: 0; width: 20px; height: 20px; display: none; align-items: center; justify-content: center; border-radius: 50%; }
+    .searchable-select .clear-btn:hover { background: #f0f0f0; color: #666; }
+    .searchable-select.has-value .clear-btn { display: flex; }
+    .searchable-select .dropdown { position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #dddddd; border-top: none; border-radius: 0 0 10px 10px; max-height: 200px; overflow-y: auto; z-index: 1000; display: none; }
+    .searchable-select .dropdown.show { display: block; }
+    .searchable-select .dropdown-item { padding: 8px 10px; cursor: pointer; border-bottom: 1px solid #f0f0f0; }
+    .searchable-select .dropdown-item:hover { background: #f7f7f7; }
+    .searchable-select .dropdown-item.selected { background: #e3f2fd; color: #1976d2; }
+    .searchable-select .dropdown-item:last-child { border-bottom: none; }
     .btn { appearance: none; border: 1px solid #dddddd; background: #ffffff; color: #333333; padding: 8px 12px; border-radius: 12px; cursor: pointer; transition: .15s ease; display:inline-block; }
     .btn:hover { border-color: #cfcfcf; background: #f7f7f7; transform: translateY(-1px); }
     .btn[disabled] { opacity: .6; cursor: not-allowed; transform: none; background: #f5f5f5; color: #999999; }
@@ -164,6 +177,7 @@
           <button class="btn" id="btnDownloadTemplate">📋 下载模板</button>
           <button class="btn" id="btnExport">导出所有图片链接</button>
           <button class="btn" id="btnSample">插入示例</button>
+          <button class="btn" id="btnAddTestData">添加测试数据</button>
           <button class="btn destructive" id="btnClear">清空画廊</button>
           <button class="btn destructive" id="btnClearAll">清空输入+画廊</button>
         </div>
@@ -197,16 +211,44 @@
           </div>
           <div class="filter-group">
             <label>客户名字</label>
-            <select id="selCustomer"><option value="">全部</option></select>
+            <div class="searchable-select" data-target="selCustomer">
+              <input type="text" placeholder="搜索或选择客户..." readonly />
+              <button class="clear-btn" title="清除选择">×</button>
+              <div class="dropdown"></div>
+            </div>
             <label>店铺ID</label>
-            <select id="selShop"><option value="">全部</option></select>
+            <div class="searchable-select" data-target="selShop">
+              <input type="text" placeholder="搜索或选择店铺ID..." readonly />
+              <button class="clear-btn" title="清除选择">×</button>
+              <div class="dropdown"></div>
+            </div>
             <label>一级行业</label>
-            <select id="sel1"><option value="">全部</option></select>
+            <div class="searchable-select" data-target="sel1">
+              <input type="text" placeholder="搜索或选择一级行业..." readonly />
+              <button class="clear-btn" title="清除选择">×</button>
+              <div class="dropdown"></div>
+            </div>
             <label>二级行业</label>
-            <select id="sel2"><option value="">全部</option></select>
+            <div class="searchable-select" data-target="sel2">
+              <input type="text" placeholder="搜索或选择二级行业..." readonly />
+              <button class="clear-btn" title="清除选择">×</button>
+              <div class="dropdown"></div>
+            </div>
             <label>三级行业</label>
-            <select id="sel3"><option value="">全部</option></select>
+            <div class="searchable-select" data-target="sel3">
+              <input type="text" placeholder="搜索或选择三级行业..." readonly />
+              <button class="clear-btn" title="清除选择">×</button>
+              <div class="dropdown"></div>
+            </div>
             <span class="kpi">已筛选：<b id="countFiltered">0</b> / 总数：<b id="countTotal">0</b></span>
+          </div>
+          <!-- 隐藏的原始select元素 -->
+          <div style="display: none;">
+            <select id="selCustomer"><option value="">全部</option></select>
+            <select id="selShop"><option value="">全部</option></select>
+            <select id="sel1"><option value="">全部</option></select>
+            <select id="sel2"><option value="">全部</option></select>
+            <select id="sel3"><option value="">全部</option></select>
           </div>
         </div>
       </div>
@@ -274,6 +316,196 @@
       jsHealth.className = 'status ' + (ok ? 'ok' : 'err');
       jsHealth.textContent = 'JS：' + (msg || (ok ? '运行正常' : '异常'));
     }
+
+    // 搜索下拉框功能
+    class SearchableSelect {
+      constructor(container) {
+        this.container = container;
+        this.input = container.querySelector('input');
+        this.dropdown = container.querySelector('.dropdown');
+        this.clearBtn = container.querySelector('.clear-btn');
+        this.targetId = container.dataset.target;
+        this.originalSelect = $('#' + this.targetId);
+        this.options = [];
+        this.selectedValue = '';
+        this.isOpen = false;
+        
+        this.init();
+      }
+      
+      init() {
+        // 点击输入框显示下拉
+        this.input.addEventListener('click', () => this.toggle());
+        
+        // 输入搜索
+        this.input.addEventListener('input', (e) => this.filter(e.target.value));
+        
+        // 清除按钮点击事件
+        if (this.clearBtn) {
+          this.clearBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.clear();
+          });
+        }
+        
+        // 失焦隐藏下拉（延迟以允许点击选项）
+        this.input.addEventListener('blur', () => {
+          setTimeout(() => this.close(), 150);
+        });
+        
+        // 键盘导航
+        this.input.addEventListener('keydown', (e) => this.handleKeydown(e));
+        
+        // 点击外部关闭
+        document.addEventListener('click', (e) => {
+          if (!this.container.contains(e.target)) {
+            this.close();
+          }
+        });
+      }
+      
+      updateOptions(options) {
+        this.options = options.map(opt => ({
+          value: opt.value || opt,
+          text: opt.text || opt,
+          selected: opt.selected || false
+        }));
+        this.render();
+      }
+      
+      render() {
+        this.dropdown.innerHTML = '';
+        const filteredOptions = this.options.filter(opt => 
+          opt.text.toLowerCase().includes((this.input.value || '').toLowerCase())
+        );
+        
+        filteredOptions.forEach(opt => {
+          const item = document.createElement('div');
+          item.className = 'dropdown-item' + (opt.selected ? ' selected' : '');
+          item.textContent = opt.text;
+          item.addEventListener('click', () => this.select(opt));
+          this.dropdown.appendChild(item);
+        });
+        
+        if (filteredOptions.length === 0) {
+          const item = document.createElement('div');
+          item.className = 'dropdown-item';
+          item.textContent = '无匹配选项';
+          item.style.color = '#999';
+          this.dropdown.appendChild(item);
+        }
+      }
+      
+      select(option) {
+        this.selectedValue = option.value;
+        // 如果选择的是"全部"选项，输入框留空
+        this.input.value = option.value === '' ? '' : option.text;
+        this.input.removeAttribute('readonly');
+        this.input.setAttribute('readonly', true);
+        
+        // 更新清除按钮显示状态
+        this.updateClearButton();
+        
+        // 更新原始select
+        if (this.originalSelect) {
+          this.originalSelect.value = option.value;
+          this.originalSelect.dispatchEvent(new Event('change'));
+        }
+        
+        this.close();
+      }
+      
+      clear() {
+        this.selectedValue = '';
+        this.input.value = '';
+        this.updateClearButton();
+        
+        // 更新原始select并触发change事件
+        if (this.originalSelect) {
+          this.originalSelect.value = '';
+          this.originalSelect.dispatchEvent(new Event('change'));
+        }
+        
+        this.close();
+      }
+      
+      updateClearButton() {
+        if (this.clearBtn) {
+          if (this.input.value && this.input.value.trim()) {
+            this.container.classList.add('has-value');
+          } else {
+            this.container.classList.remove('has-value');
+          }
+        }
+      }
+      
+      toggle() {
+        if (this.isOpen) {
+          this.close();
+        } else {
+          this.open();
+        }
+      }
+      
+      open() {
+        this.isOpen = true;
+        this.dropdown.classList.add('show');
+        this.input.removeAttribute('readonly');
+        this.input.focus();
+        this.render();
+      }
+      
+      close() {
+        this.isOpen = false;
+        this.dropdown.classList.remove('show');
+        this.input.setAttribute('readonly', true);
+      }
+      
+      filter(query) {
+        this.render();
+      }
+      
+      handleKeydown(e) {
+        if (!this.isOpen) return;
+        
+        const items = this.dropdown.querySelectorAll('.dropdown-item');
+        const current = this.dropdown.querySelector('.dropdown-item.selected');
+        let index = Array.from(items).indexOf(current);
+        
+        switch (e.key) {
+          case 'ArrowDown':
+            e.preventDefault();
+            index = Math.min(index + 1, items.length - 1);
+            this.highlightItem(items[index]);
+            break;
+          case 'ArrowUp':
+            e.preventDefault();
+            index = Math.max(index - 1, 0);
+            this.highlightItem(items[index]);
+            break;
+          case 'Enter':
+            e.preventDefault();
+            if (current) current.click();
+            break;
+          case 'Escape':
+            e.preventDefault();
+            this.close();
+            break;
+        }
+      }
+      
+      highlightItem(item) {
+        this.dropdown.querySelectorAll('.dropdown-item').forEach(i => i.classList.remove('selected'));
+        if (item) item.classList.add('selected');
+      }
+    }
+    
+    // 初始化所有搜索下拉框
+    const searchableSelects = {};
+    $$('.searchable-select').forEach(container => {
+      const targetId = container.dataset.target;
+      searchableSelects[targetId] = new SearchableSelect(container);
+    });
 
     try {
       const safeStorage = { get(k){try{return localStorage.getItem(k)}catch(e){return null}}, set(k,v){try{localStorage.setItem(k,v)}catch(e){}} };
@@ -433,54 +665,129 @@
         )).sort((a,b) => a.localeCompare(b,'zh-Hans-CN')); 
       }
 
+      // 缓存优化：避免重复计算
+      let filterCache = new Map();
+      let lastCacheKey = '';
+      
       function refreshFilterOptionsCascading(){
-        const sel1=$('#sel1'), sel2=$('#sel2'), sel3=$('#sel3'), selCustomer=$('#selCustomer'), selShop=$('#selShop'); 
-        if(!sel1||!sel2||!sel3||!selCustomer||!selShop) return;
+        try {
+          const sel1=$('#sel1'), sel2=$('#sel2'), sel3=$('#sel3'), selCustomer=$('#selCustomer'), selShop=$('#selShop'); 
+          if(!sel1||!sel2||!sel3||!selCustomer||!selShop) return;
         const s1=state.sel1||'', s2=state.sel2||'', s3=state.sel3||'', sCust=state.selCustomer||'', sShop=state.selShop||''; 
         const all=state.items;
+        
+        // 生成缓存键
+        const cacheKey = `${all.length}-${sCust}-${sShop}-${s1}-${s2}`;
+        if (cacheKey === lastCacheKey && filterCache.has(cacheKey)) {
+          return; // 使用缓存，避免重复计算
+        }
 
-        // 客户名字：按字典序
-        const optsCust = uniqAlpha(all.map(x=>x.客户名字));
+        // 客户名字：按字典序（只在数据变化时重新计算）
+        let optsCust = filterCache.get('customers');
+        if (!optsCust || filterCache.get('dataLength') !== all.length) {
+          optsCust = uniqAlpha(all.map(x=>x.客户名字));
+          filterCache.set('customers', optsCust);
+          filterCache.set('dataLength', all.length);
+        }
         
         // 店铺ID：跟随客户名字筛选后，使用字典序
-        const itemsShop = sCust ? all.filter(x=>x.客户名字===sCust) : all; 
+        const itemsShop = sCust ? all.filter(x=>(x.客户名字||'')===sCust) : all; 
         const optsShop = uniqAlpha(itemsShop.map(x=>x.店铺ID));
         
-        // 一级行业：跟随店铺ID筛选后，按频次降序
-        const items1 = sShop ? itemsShop.filter(x=>x.店铺ID===sShop) : itemsShop;
-        const opts1 = sortByFreq(items1.map(x=>x.一级行业));
+        // 一级行业：支持独立筛选，优先按客户和店铺筛选，如果都没选择则显示全部
+        const items1Base = sCust ? (sShop ? itemsShop.filter(x=>(x.店铺ID||'')===sShop) : itemsShop) : all;
+        const opts1 = sortByFreq(items1Base.map(x=>x.一级行业));
         
-        // 二级：跟随一级筛选后，使用字典序
-        const items2 = s1 ? items1.filter(x=>x.一级行业===s1) : items1; 
-        const opts2 = uniqAlpha(items2.map(x=>x.二级行业));
+        // 二级：支持独立筛选，可以基于一级行业筛选，也可以独立使用
+         let items2Base;
+         if (sCust) {
+           // 如果选择了客户，基于客户数据
+           items2Base = sShop ? itemsShop.filter(x=>(x.店铺ID||'')===sShop) : itemsShop;
+           // 在客户数据基础上应用一级行业筛选
+           items2Base = s1 ? items2Base.filter(x=>(x.一级行业||'')===s1) : items2Base;
+         } else if (s1) {
+           // 如果没选客户但选了一级行业，基于一级行业筛选
+           items2Base = all.filter(x=>(x.一级行业||'')===s1);
+         } else {
+           // 都没选择，显示全部
+           items2Base = all;
+         }
+         const opts2 = uniqAlpha(items2Base.map(x=>x.二级行业));
         
-        // 三级：跟随二级筛选后，使用字典序
-        const items3 = s2 ? items2.filter(x=>x.二级行业===s2) : items2; 
+        // 三级：支持独立筛选，可以基于一级、二级行业筛选，也可以独立使用
+        let items3Base;
+        if (sCust) {
+          // 如果选择了客户，基于客户数据
+          items3Base = items2Base;
+        } else if (s1 || s2) {
+          // 如果没选客户但选了行业，基于行业筛选
+          items3Base = all;
+          if (s1) items3Base = items3Base.filter(x=>(x.一级行业||'')===s1);
+          if (s2) items3Base = items3Base.filter(x=>(x.二级行业||'')===s2);
+        } else {
+          // 都没选择，显示全部
+          items3Base = all;
+        }
+        const items3 = s2 && (sCust || s1) ? items3Base.filter(x=>(x.二级行业||'')===s2) : items3Base; 
         const opts3 = uniqAlpha(items3.map(x=>x.三级行业));
 
         function fill(sel, opts, cur){
+          // 更新原始select
           sel.innerHTML='';
           const mk=(v,t)=>{ const o=document.createElement('option'); o.value=v; o.textContent=t||v||'全部'; return o; };
           sel.appendChild(mk('', '全部'));
           opts.forEach(v=>sel.appendChild(mk(v)));
           sel.value = opts.includes(cur) ? cur : '';
+          
+          // 更新对应的搜索下拉框
+          const searchableSelect = searchableSelects[sel.id];
+          if (searchableSelect) {
+            const options = [{ value: '', text: '全部' }].concat(opts.map(v => ({ value: v, text: v })));
+            searchableSelect.updateOptions(options);
+            
+            // 设置当前值
+            const currentValue = opts.includes(cur) ? cur : '';
+            const currentText = currentValue || ''; // 留空而不是显示"全部"
+            searchableSelect.input.value = currentText;
+            searchableSelect.selectedValue = currentValue;
+            
+            // 更新清除按钮状态
+            searchableSelect.updateClearButton();
+          }
         }
 
         fill(selCustomer, optsCust, sCust);
-        const newCustValid = optsCust.includes(sCust); let nsShop=sShop, ns1=s1, ns2=s2, ns3=s3; 
-        if(!newCustValid){ nsShop=''; ns1=''; ns2=''; ns3=''; }
+        const newCustValid = optsCust.includes(sCust); 
+        let nsShop=sShop, ns1=s1, ns2=s2, ns3=s3; 
+        
+        // 只有在客户无效时才清空其他选择
+        if(!newCustValid && sCust){ 
+          nsShop=''; ns1=''; ns2=''; ns3=''; 
+        }
         
         fill(selShop, optsShop, nsShop);
         const newShopValid = optsShop.includes(nsShop); 
-        if(!newShopValid){ ns1=''; ns2=''; ns3=''; }
+        
+        // 只有在店铺无效时才清空行业选择
+        if(!newShopValid && nsShop){ 
+          ns1=''; ns2=''; ns3=''; 
+        }
         
         fill(sel1, opts1, ns1);
         const newS1Valid = opts1.includes(ns1); 
-        if(!newS1Valid){ ns2=''; ns3=''; }
+        
+        // 只有在一级行业无效时才清空下级选择
+        if(!newS1Valid && ns1){ 
+          ns2=''; ns3=''; 
+        }
         
         fill(sel2, opts2, ns2);
         const newS2Valid = opts2.includes(ns2); 
-        if(!newS2Valid){ ns3=''; }
+        
+        // 只有在二级行业无效时才清空三级选择
+        if(!newS2Valid && ns2){ 
+          ns3=''; 
+        }
         
         fill(sel3, opts3, ns3);
         
@@ -490,54 +797,74 @@
         state.sel1 = newS1Valid ? ns1 : '';
         state.sel2 = newS2Valid ? ns2 : '';
         state.sel3 = ns3;
+        
+        // 更新缓存键
+        lastCacheKey = cacheKey;
+        } catch (error) {
+          console.error('筛选逻辑错误:', error);
+          markHealth(false, '筛选失败');
+          // 不要抛出错误，避免闪退
+        }
       }
 
       function applyFilters(list){
-        const q=(state.q||'').toLowerCase(); 
-        const f1=state.sel1||''; 
-        const f2=state.sel2||''; 
-        const f3=state.sel3||''; 
-        const fCust=state.selCustomer||''; 
-        const fShop=state.selShop||'';
-        
-        return list.filter(x=>{
-          const byTitle = q ? String(x.标题||'').toLowerCase().includes(q) : true;
-          const by1 = f1? (x.一级行业||'')===f1 : true;
-          const by2 = f2? (x.二级行业||'')===f2 : true;
-          const by3 = f3? (x.三级行业||'')===f3 : true;
-          const byCust = fCust? (x.客户名字||'')===fCust : true;
-          const byShop = fShop? (x.店铺ID||'')===fShop : true;
-          return byTitle && by1 && by2 && by3 && byCust && byShop;
-        });
+        try {
+          const q=(state.q||'').toLowerCase(); 
+          const f1=state.sel1||''; 
+          const f2=state.sel2||''; 
+          const f3=state.sel3||''; 
+          const fCust=state.selCustomer||''; 
+          const fShop=state.selShop||'';
+          
+          return list.filter(x=>{
+            const byTitle = q ? String(x.标题||'').toLowerCase().includes(q) : true;
+            const by1 = f1? (x.一级行业||'')===f1 : true;
+            const by2 = f2? (x.二级行业||'')===f2 : true;
+            const by3 = f3? (x.三级行业||'')===f3 : true;
+            const byCust = fCust? (x.客户名字||'')===fCust : true;
+            const byShop = fShop? (x.店铺ID||'')===fShop : true;
+            return byTitle && by1 && by2 && by3 && byCust && byShop;
+          });
+        } catch (error) {
+          console.error('筛选应用错误:', error);
+          markHealth(false, '筛选应用失败');
+          return []; // 返回空数组避免闪退
+        }
       }
 
       function render(){
-        applyVars();
-        if(countTotalEl) countTotalEl.textContent=String(state.items.length);
-        const data = applyFilters(state.items);
-        lastRendered = data;
-        if(countFilteredEl) countFilteredEl.textContent=String(data.length);
-        if(!grid) return;
-        grid.innerHTML='';
-        data.forEach((rec,idx)=>{
-          const fig=document.createElement('figure'); fig.className='card'; fig.draggable=!!state.dragMode; fig.dataset.idx=String(idx);
-          const box=document.createElement('div'); box.className='thumb loading';
-          const img=document.createElement('img');
-          img.loading='lazy'; img.decoding='async';
-          img.alt = rec.标题 ? (rec.标题+'-'+(idx+1)) : ('image-'+(idx+1));
-          img.referrerPolicy='no-referrer'; img.crossOrigin='anonymous';
-          if(!state.noNetwork){ img.src=rec.img; } else { box.classList.remove('loading'); box.style.borderStyle='solid'; const tip=document.createElement('div'); tip.style.fontSize='12px'; tip.style.color='var(--muted)'; tip.textContent='已禁用图片加载'; box.appendChild(tip); }
-          img.addEventListener('load',()=>box.classList.remove('loading'));
-          img.addEventListener('error',()=>{ box.classList.remove('loading'); box.classList.add('error'); });
-          box.appendChild(img); fig.appendChild(box);
-          const meta=document.createElement('div'); meta.className='meta';
-          const title=document.createElement('div'); title.className='title'; title.textContent=(rec.标题||'(无标题)');
-          const idline=document.createElement('div'); idline.textContent=`topic_id：${rec.topic_id||'-'}`;
-          const badges=document.createElement('div'); badges.className='badgelist'; const b=document.createElement('span'); b.className='badge'; b.textContent=`累计定招品数: ${rec.累计定招品数||'-'}`; badges.appendChild(b);
-          meta.appendChild(title); meta.appendChild(idline); meta.appendChild(badges);
-          fig.appendChild(meta);
-          grid.appendChild(fig);
-        });
+        try {
+          applyVars();
+          if(countTotalEl) countTotalEl.textContent=String(state.items.length);
+          const data = applyFilters(state.items);
+          lastRendered = data;
+          if(countFilteredEl) countFilteredEl.textContent=String(data.length);
+          if(!grid) return;
+          grid.innerHTML='';
+          data.forEach((rec,idx)=>{
+            const fig=document.createElement('figure'); fig.className='card'; fig.draggable=!!state.dragMode; fig.dataset.idx=String(idx);
+            const box=document.createElement('div'); box.className='thumb loading';
+            const img=document.createElement('img');
+            img.loading='lazy'; img.decoding='async';
+            img.alt = rec.标题 ? (rec.标题+'-'+(idx+1)) : ('image-'+(idx+1));
+            img.referrerPolicy='no-referrer'; img.crossOrigin='anonymous';
+            if(!state.noNetwork){ img.src=rec.img; } else { box.classList.remove('loading'); box.style.borderStyle='solid'; const tip=document.createElement('div'); tip.style.fontSize='12px'; tip.style.color='var(--muted)'; tip.textContent='已禁用图片加载'; box.appendChild(tip); }
+            img.addEventListener('load',()=>box.classList.remove('loading'));
+            img.addEventListener('error',()=>{ box.classList.remove('loading'); box.classList.add('error'); });
+            box.appendChild(img); fig.appendChild(box);
+            const meta=document.createElement('div'); meta.className='meta';
+            const title=document.createElement('div'); title.className='title'; title.textContent=(rec.标题||'(无标题)');
+            const idline=document.createElement('div'); idline.textContent=`topic_id：${rec.topic_id||'-'}`;
+            const badges=document.createElement('div'); badges.className='badgelist'; const b=document.createElement('span'); b.className='badge'; b.textContent=`累计定招品数: ${rec.累计定招品数||'-'}`; badges.appendChild(b);
+            meta.appendChild(title); meta.appendChild(idline); meta.appendChild(badges);
+            fig.appendChild(meta);
+            grid.appendChild(fig);
+          });
+        } catch (error) {
+          console.error('渲染错误:', error);
+          markHealth(false, '渲染失败');
+          // 不要抛出错误，避免闪退
+        }
       }
 
       // Lightbox
@@ -646,6 +973,21 @@ sc02.alicdn.com/kf/H2f432b7c7a4a4adfb18e2e6a5b2f28a8q.jpg`;
 ${ta.value||''}`.trim();
       });
 
+      // 添加测试数据按钮
+      $('#btnAddTestData')?.addEventListener('click',()=>{
+        const testData = [
+          {img: 'https://sc02.alicdn.com/kf/Hbb5f936a288f4ffeafd26f2a709d8883G.jpg', topic_id: '001', 标题: '测试产品1', 客户名字: '客户A', 店铺ID: 'SHOP001', 一级行业: '电子产品', 二级行业: '手机', 三级行业: '智能手机', 累计定招品数: '100'},
+          {img: 'https://sc02.alicdn.com/kf/H2f432b7c7a4a4adfb18e2e6a5b2f28a8q.jpg', topic_id: '002', 标题: '测试产品2', 客户名字: '客户B', 店铺ID: 'SHOP002', 一级行业: '服装', 二级行业: '男装', 三级行业: '衬衫', 累计定招品数: '50'},
+          {img: 'https://sc02.alicdn.com/kf/Hbb5f936a288f4ffeafd26f2a709d8883G.jpg', topic_id: '003', 标题: '测试产品3', 客户名字: '客户A', 店铺ID: 'SHOP003', 一级行业: '家居', 二级行业: '厨具', 三级行业: '锅具', 累计定招品数: '75'},
+          {img: 'https://sc02.alicdn.com/kf/H2f432b7c7a4a4adfb18e2e6a5b2f28a8q.jpg', topic_id: '004', 标题: '测试产品4', 客户名字: '客户C', 店铺ID: 'SHOP004', 一级行业: '电子产品', 二级行业: '电脑', 三级行业: '笔记本', 累计定招品数: '120'},
+          {img: 'https://sc02.alicdn.com/kf/Hbb5f936a288f4ffeafd26f2a709d8883G.jpg', topic_id: '005', 标题: '测试产品5', 客户名字: '客户B', 店铺ID: 'SHOP005', 一级行业: '服装', 二级行业: '女装', 三级行业: '连衣裙', 累计定招品数: '80'}
+        ];
+        state.items = state.items.concat(testData);
+        refreshFilterOptionsCascading(); 
+        render();
+        alert('已添加 ' + testData.length + ' 条测试数据');
+      });
+
       $('#btnClear')?.addEventListener('click',()=>{ if(confirm('清空画廊？')){ state.items=[]; refreshFilterOptionsCascading(); render(); } });
       $('#btnClearAll')?.addEventListener('click',()=>{ if(confirm('清空输入与画廊？')){ state.items=[]; const ta=$('#urlInput'); if(ta) ta.value=''; refreshFilterOptionsCascading(); render(); } });
 
@@ -688,11 +1030,55 @@ ${ta.value||''}`.trim();
       $('#noNetwork')?.addEventListener('change',(e)=>{ state.noNetwork=e.target.checked; safeStorage.set('noNetwork', state.noNetwork?'1':'0'); render(); });
       $('#dragMode')?.addEventListener('change',(e)=>{ state.dragMode=e.target.checked; render(); });
 
-      $('#sel1')?.addEventListener('change',(e)=>{ state.sel1=e.target.value||''; refreshFilterOptionsCascading(); render(); });
-      $('#sel2')?.addEventListener('change',(e)=>{ state.sel2=e.target.value||''; refreshFilterOptionsCascading(); render(); });
-      $('#sel3')?.addEventListener('change',(e)=>{ state.sel3=e.target.value||''; render(); });
-      $('#selCustomer')?.addEventListener('change',(e)=>{ state.selCustomer=e.target.value||''; render(); });
-      $('#selShop')?.addEventListener('change',(e)=>{ state.selShop=e.target.value||''; render(); });
+      $('#sel1')?.addEventListener('change',(e)=>{ 
+        try {
+          state.sel1=e.target.value||''; 
+          refreshFilterOptionsCascading(); 
+          render(); 
+        } catch (error) {
+          console.error('一级行业筛选错误:', error);
+          markHealth(false, '一级行业筛选失败');
+        }
+      });
+      $('#sel2')?.addEventListener('change',(e)=>{ 
+        try {
+          state.sel2=e.target.value||''; 
+          refreshFilterOptionsCascading(); 
+          render(); 
+        } catch (error) {
+          console.error('二级行业筛选错误:', error);
+          markHealth(false, '二级行业筛选失败');
+        }
+      });
+      $('#sel3')?.addEventListener('change',(e)=>{ 
+        try {
+          state.sel3=e.target.value||''; 
+          render(); 
+        } catch (error) {
+          console.error('三级行业筛选错误:', error);
+          markHealth(false, '三级行业筛选失败');
+        }
+      });
+      $('#selCustomer')?.addEventListener('change',(e)=>{ 
+        try {
+          state.selCustomer=e.target.value||''; 
+          refreshFilterOptionsCascading(); 
+          render(); 
+        } catch (error) {
+          console.error('客户筛选错误:', error);
+          markHealth(false, '客户筛选失败');
+        }
+      });
+      $('#selShop')?.addEventListener('change',(e)=>{ 
+        try {
+          state.selShop=e.target.value||''; 
+          refreshFilterOptionsCascading(); 
+          render(); 
+        } catch (error) {
+          console.error('店铺筛选错误:', error);
+          markHealth(false, '店铺筛选失败');
+        }
+      });
       $('#q')?.addEventListener('input',(e)=>{ state.q=e.target.value||''; render(); });
 
       try{ applyVars(); refreshFilterOptionsCascading(); render(); markHealth(true, '运行正常'); } catch(err){ markHealth(false, '初始化失败'); alert('初始化失败：'+(err.message||err)); }
